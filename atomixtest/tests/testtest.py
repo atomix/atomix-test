@@ -1,7 +1,6 @@
-from atomixtest.test import test, log
+from atomixtest.logger import log
 from atomixtest.cluster import node
 
-@test('test-test')
 def test_test():
     """Test test"""
     log.message("Attempting to isolate node 1")

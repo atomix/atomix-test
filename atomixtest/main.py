@@ -1,8 +1,7 @@
 from cluster import get_cluster, set_cluster, Cluster
-from test import Test
 from errors import TestError
 import sys
-from tests import *
+from tests import all_tests, run_test
 
 def main():
     """Runs the test framework."""
@@ -39,7 +38,7 @@ def main():
     logs_parser.add_argument('--cluster', '-c', help="The cluster from which to retrieve logs")
 
     run_parser = subparsers.add_parser('run', help="Run a test")
-    run_parser.add_argument('test', help="The test to run")
+    run_parser.add_argument('test', nargs='?', help="The test to run")
     run_parser.add_argument('--cluster', '-c', help="The cluster on which to run the test")
 
     args = parser.parse_args()
@@ -61,12 +60,14 @@ def main():
             print get_cluster(args.cluster).node(args.node).logs()
         elif args.action == 'run':
             set_cluster(args.cluster)
-            try:
-                Test(args.test).run()
-            except AssertionError, e:
-                sys.exit(1)
-            else:
-                sys.exit(0)
+            tests = all_tests() if args.test is None else [args.test,]
+            exitcode = 0
+            for test in tests:
+                try:
+                    run_test(test)
+                except AssertionError:
+                    exitcode = 1
+            sys.exit(exitcode)
     except TestError, e:
         print str(e)
         sys.exit(1)
