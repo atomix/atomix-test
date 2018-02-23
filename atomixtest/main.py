@@ -34,6 +34,10 @@ def main():
     cluster_parser = subparsers.add_parser('cluster-info', help="Get information about a test cluster")
     cluster_parser.add_argument('cluster', nargs='?', help="The cluster for which to get information")
 
+    logs_parser = subparsers.add_parser('logs', help="Get logs for a specific node")
+    logs_parser.add_argument('node', help="The node for which to retrieve logs")
+    logs_parser.add_argument('--cluster', '-c', help="The cluster from which to retrieve logs")
+
     run_parser = subparsers.add_parser('run', help="Run a test")
     run_parser.add_argument('test', help="The test to run")
     run_parser.add_argument('--cluster', '-c', help="The cluster on which to run the test")
@@ -53,6 +57,8 @@ def main():
             get_cluster(args.cluster).remove_node(args.node)
         elif args.action == 'cluster-info':
             print get_cluster(args.cluster)
+        elif args.action == 'logs':
+            print get_cluster(args.cluster).node(args.node).logs()
         elif args.action == 'run':
             set_cluster(args.cluster)
             try:

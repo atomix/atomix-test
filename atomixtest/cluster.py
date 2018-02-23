@@ -149,6 +149,10 @@ class Node(object):
         port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
         return port_bindings['{}/tcp'.format(self.http_port)][0]['HostPort']
 
+    def logs(self):
+        """Returns the logs for the node."""
+        return self.docker_container.logs()
+
     @property
     def docker_container(self):
         try:
