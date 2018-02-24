@@ -7,6 +7,7 @@ import shutil
 import os
 import docker
 import socket
+import time
 from docker.api.client import APIClient
 from docker.utils import kwargs_from_env
 
@@ -185,12 +186,21 @@ class Node(object):
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}})
         self.client = AtomixClient(port=self.local_port)
+        self._wait_for_start()
 
     def run(self, *command):
         """Runs the given command in the container."""
         command = ' '.join([shlex_quote(arg) for arg in command])
         self.log.message("Executing command '{}' on {}", command, self.name)
         return self.docker_container.exec_run(command)
+
+    def _wait_for_start(self):
+        for _ in range(10):
+            if not self.client.status:
+                time.sleep(1)
+            else:
+                return
+        raise AssertionError("Failed to start node {}".format(self.name))
 
     def stop(self):
         """Stops the node."""
@@ -201,6 +211,7 @@ class Node(object):
         """Starts the node."""
         self.log.message("Starting node {}", self.name)
         self.docker_container.start()
+        self._wait_for_start()
 
     def kill(self):
         """Kills the node."""
@@ -211,11 +222,13 @@ class Node(object):
         """Recovers a killed node."""
         self.log.message("Recovering node {}", self.name)
         self.docker_container.start()
+        self._wait_for_start()
 
     def restart(self):
         """Restarts the node."""
         self.log.message("Restarting node {}", self.name)
         self.docker_container.restart()
+        self._wait_for_start()
 
     def partition(self, node):
         """Partitions this node from the given node."""
