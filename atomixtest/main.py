@@ -1,4 +1,4 @@
-from cluster import get_cluster, set_cluster, Cluster
+from cluster import get_cluster, Cluster
 from errors import TestError
 import sys
 
@@ -45,17 +45,8 @@ def main():
 
     command = sys.argv[1]
     if command == 'run':
-        args = sys.argv[2:]
-        cluster = None
-        for i in range(len(args)):
-            if args[i] == '-c' or args[i] == '--cluster':
-                cluster = args[i+1]
-                del args[i]
-                del args[i]
-        set_cluster(cluster)
-
         from pytest import main
-        sys.exit(main(args))
+        sys.exit(main(sys.argv[2:]))
     else:
         args = _create_parser().parse_args()
         try:

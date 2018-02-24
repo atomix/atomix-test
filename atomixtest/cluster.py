@@ -65,6 +65,7 @@ class Cluster(object):
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
             Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup()
+        self.wait_for_start()
         return self.nodes()
 
     def add_node(self, type='server'):
@@ -72,12 +73,23 @@ class Cluster(object):
         self.log.message("Adding a node to the cluster")
         node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
         node.setup()
+        node.wait_for_start()
         return node
 
     def remove_node(self, id):
         """Removes a node from the cluster."""
         self.log.message("Removing a node from the cluster")
         self.node(id).teardown()
+
+    def wait_for_start(self):
+        """Waits for a cluster to finish startup."""
+        for node in self.nodes():
+            node.wait_for_start()
+
+    def wait_for_stop(self):
+        """Waits for a cluster to finish shutdown."""
+        for node in self.nodes():
+            node.wait_for_stop()
 
     def teardown(self):
         """Tears down the cluster."""
@@ -140,8 +152,11 @@ class Node(object):
     def __getattr__(self, name):
         try:
             return super(Node, self).__getattr__(name)
-        except AttributeError:
-            return getattr(self.client, name)
+        except AttributeError, e:
+            try:
+                return getattr(self.client, name)
+            except AttributeError:
+                raise e
 
     def _find_open_port(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -186,21 +201,12 @@ class Node(object):
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}})
         self.client = AtomixClient(port=self.local_port)
-        self._wait_for_start()
 
     def run(self, *command):
         """Runs the given command in the container."""
         command = ' '.join([shlex_quote(arg) for arg in command])
         self.log.message("Executing command '{}' on {}", command, self.name)
         return self.docker_container.exec_run(command)
-
-    def _wait_for_start(self):
-        for _ in range(10):
-            if not self.client.status:
-                time.sleep(1)
-            else:
-                return
-        raise AssertionError("Failed to start node {}".format(self.name))
 
     def stop(self):
         """Stops the node."""
@@ -211,7 +217,7 @@ class Node(object):
         """Starts the node."""
         self.log.message("Starting node {}", self.name)
         self.docker_container.start()
-        self._wait_for_start()
+        self.wait_for_start()
 
     def kill(self):
         """Kills the node."""
@@ -222,13 +228,13 @@ class Node(object):
         """Recovers a killed node."""
         self.log.message("Recovering node {}", self.name)
         self.docker_container.start()
-        self._wait_for_start()
+        self.wait_for_start()
 
     def restart(self):
         """Restarts the node."""
         self.log.message("Restarting node {}", self.name)
         self.docker_container.restart()
-        self._wait_for_start()
+        self.wait_for_start()
 
     def partition(self, node):
         """Partitions this node from the given node."""
@@ -278,15 +284,18 @@ class Node(object):
         self.log.message("Removing container {}", self.name)
         container.remove()
 
-    def wait(self):
+    def wait_for_start(self):
+        """Waits for the node to finish startup."""
+        for _ in range(30):
+            if not self.client.status():
+                time.sleep(1)
+            else:
+                return
+        raise AssertionError("Failed to start node {}".format(self.name))
+
+    def wait_for_stop(self):
         """Waits for the node to exit."""
         self.docker_container.wait()
-
-cluster = None
-
-def set_cluster(name):
-    global cluster
-    cluster = get_cluster(name)
 
 def _find_cluster():
     docker_client = docker.from_env()
@@ -299,15 +308,4 @@ def _find_cluster():
     raise UnknownClusterError(None)
 
 def get_cluster(name=None):
-    if name is not None:
-        return Cluster(name)
-    elif cluster is not None:
-        return cluster
-    else:
-        return _find_cluster()
-
-def node(id):
-    return cluster.node(id)
-
-def nodes():
-    return cluster.nodes
+    return Cluster(name) if name is not None else _find_cluster()
