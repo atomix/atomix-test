@@ -27,11 +27,10 @@ class Cluster(object):
     def node(self, id):
         """Returns the node with the given ID."""
         if isinstance(id, int):
-            return self.nodes[id-1]
+            return self.nodes()[id-1]
         else:
-            return [node for node in self.nodes if node.name == id].pop()
+            return [node for node in self.nodes() if node.name == id].pop()
 
-    @property
     def nodes(self, type=None):
         """Returns a list of nodes in the cluster."""
         # Sort the containers by name and then extract the IP address from the container info.
@@ -46,11 +45,9 @@ class Cluster(object):
             nodes.append(Node(container.name, container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'], container_info['Config']['Labels']['atomix-type'], self))
         return nodes
 
-    @property
     def servers(self):
         return self.nodes(Node.Type.SERVER)
 
-    @property
     def clients(self):
         return self.nodes(Node.Type.CLIENT)
 
@@ -67,11 +64,14 @@ class Cluster(object):
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
             Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup()
+        return self.nodes()
 
     def add_node(self, type='server'):
         """Adds a new node to the cluster."""
         self.log.message("Adding a node to the cluster")
-        Node(self._node_name(len(self.nodes)+1), next(self.network.hosts), type, self).setup()
+        node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
+        node.setup()
+        return node
 
     def remove_node(self, id):
         """Removes a node from the cluster."""
@@ -81,7 +81,7 @@ class Cluster(object):
     def teardown(self):
         """Tears down the cluster."""
         self.log.message("Tearing down cluster")
-        for node in self.nodes:
+        for node in self.nodes():
             try:
                 node.teardown()
             except UnknownNodeError, e:
@@ -105,7 +105,7 @@ class Cluster(object):
         lines.append('  subnet: {}'.format(self.network.subnet))
         lines.append('  gateway: {}'.format(self.network.gateway))
         lines.append('nodes:')
-        for node in self.nodes:
+        for node in self.nodes():
             lines.append('  {}:'.format(node.name))
             lines.append('    state: {}'.format(node.docker_container.status))
             lines.append('    type: {}'.format(node.type))
@@ -136,6 +136,12 @@ class Node(object):
         except UnknownNodeError:
             self.client = None
 
+    def __getattr__(self, name):
+        try:
+            return super(Node, self).__getattr__(name)
+        except AttributeError:
+            return getattr(self.client, name)
+
     def _find_open_port(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("", 0))
@@ -165,7 +171,7 @@ class Node(object):
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
         args.append('--bootstrap')
-        for node in self.cluster.nodes:
+        for node in self.cluster.nodes():
             args.append('%s:%s:%d' % (node.name, node.ip, node.tcp_port))
 
         self.log.message("Running container {}", self.name)
@@ -178,6 +184,7 @@ class Node(object):
             ports={self.http_port: self._find_open_port()},
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}})
+        self.client = AtomixClient(port=self.local_port)
 
     def run(self, *command):
         """Runs the given command in the container."""

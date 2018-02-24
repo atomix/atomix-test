@@ -26,4 +26,4 @@ class Logger(object):
     def error(self, message, *args, **kwargs):
         self._output(Logger.Type.ERROR, message, *args, **kwargs)
 
-log = Logger('none', Logger.Type.TEST)
+log = Logger('test', Logger.Type.TEST)

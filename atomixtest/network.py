@@ -85,7 +85,7 @@ class Network(object):
     def isolate(self, node):
         """Isolates the given node from all its peers."""
         self.log.message("Isolating node {}", node.name)
-        for n in node.cluster.nodes:
+        for n in node.cluster.servers():
             if n.name != node.name:
                 self.partition(node, n)
                 self.partition(n, node)
@@ -93,7 +93,7 @@ class Network(object):
     def unisolate(self, node):
         """Unisolates the given node from all its peers."""
         self.log.message("Healing node {}", node.name)
-        for n in node.cluster.nodes:
+        for n in node.cluster.servers():
             if n.name != node.name:
                 self.heal(node, n)
                 self.heal(n, node)
