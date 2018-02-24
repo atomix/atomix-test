@@ -25,6 +25,8 @@ def _create_parser():
     remove_node_parser.add_argument('node', help="The node to remove from the cluster")
     remove_node_parser.add_argument('--cluster', '-c', help="The cluster from which to remove the node")
 
+    clusters_parser = subparsers.add_parser('clusters', help="Get a list of test clusters")
+
     cluster_parser = subparsers.add_parser('cluster-info', help="Get information about a test cluster")
     cluster_parser.add_argument('cluster', nargs='?', help="The cluster for which to get information")
 
@@ -60,6 +62,8 @@ def main():
                 get_cluster(args.cluster).add_node(args.type)
             elif args.action == 'remove-node':
                 get_cluster(args.cluster).remove_node(args.node)
+            elif args.action == 'clusters':
+                print '\n'.join([cluster.name for cluster in get_clusters()])
             elif args.action == 'cluster-info':
                 if args.cluster is not None:
                     print get_cluster(args.cluster)

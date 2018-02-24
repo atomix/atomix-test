@@ -3,7 +3,7 @@ from atomixtest import with_cluster, log
 @with_cluster(nodes=3)
 def test_test(cluster):
     """Test test"""
-    client1 = cluster.add_client()
+    client1 = cluster.add_node(type='client')
     log.message("Attempting to isolate node 1")
     cluster.node(1).isolate()
     log.message("Attempting to heal node 1")
