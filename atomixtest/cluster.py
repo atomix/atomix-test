@@ -114,7 +114,7 @@ class Cluster(object):
 
     def __str__(self):
         lines = []
-        lines.append('name: {}'.format(self.name))
+        lines.append('cluster: {}'.format(self.name))
         lines.append('network:')
         lines.append('  name: {}'.format(self.network.name))
         lines.append('  subnet: {}'.format(self.network.subnet))
@@ -311,3 +311,13 @@ def _find_cluster():
 
 def get_cluster(name=None):
     return Cluster(name) if name is not None else _find_cluster()
+
+def get_clusters():
+    docker_client = docker.from_env()
+    docker_api_client = APIClient(kwargs_from_env())
+    containers = docker_client.containers.list(filters={'label': 'atomix-test=true'})
+    clusters = set()
+    for container in containers:
+        cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
+        clusters.add(cluster_name)
+    return [Cluster(name) for name in clusters]

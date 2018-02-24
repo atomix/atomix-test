@@ -1,4 +1,4 @@
-from cluster import get_cluster, Cluster
+from cluster import get_cluster, get_clusters, Cluster
 from errors import TestError
 import sys
 
@@ -61,7 +61,10 @@ def main():
             elif args.action == 'remove-node':
                 get_cluster(args.cluster).remove_node(args.node)
             elif args.action == 'cluster-info':
-                print get_cluster(args.cluster)
+                if args.cluster is not None:
+                    print get_cluster(args.cluster)
+                else:
+                    print '\n'.join([str(cluster) for cluster in get_clusters()])
             elif args.action == 'logs':
                 print get_cluster(args.cluster).node(args.node).logs()
         except TestError, e:
