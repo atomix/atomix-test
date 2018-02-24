@@ -1,13 +1,8 @@
 from cluster import get_cluster, set_cluster, Cluster
 from errors import TestError
 import sys
-from tests import all_tests, run_test
 
-def main():
-    """Runs the test framework."""
-    from colorama import init
-    init()
-
+def _create_parser():
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -38,43 +33,48 @@ def main():
     logs_parser.add_argument('--cluster', '-c', help="The cluster from which to retrieve logs")
 
     run_parser = subparsers.add_parser('run', help="Run a test")
-    run_parser.add_argument('test', nargs='?', help="The test to run")
+    run_parser.add_argument('tests', nargs='*', help="The tests to run")
     run_parser.add_argument('--cluster', '-c', help="The cluster on which to run the test")
 
-    args = parser.parse_args()
+    return parser
 
-    try:
-        if args.action == 'setup':
-            Cluster(args.name).setup(args.nodes, args.subnet)
-        elif args.action == 'teardown':
-            cluster = get_cluster(args.name)
-            cluster.teardown()
-            cluster.cleanup()
-        elif args.action == 'add-node':
-            get_cluster(args.cluster).add_node(args.type)
-        elif args.action == 'remove-node':
-            get_cluster(args.cluster).remove_node(args.node)
-        elif args.action == 'cluster-info':
-            print get_cluster(args.cluster)
-        elif args.action == 'logs':
-            print get_cluster(args.cluster).node(args.node).logs()
-        elif args.action == 'run':
-            set_cluster(args.cluster)
-            tests = all_tests() if args.test is None else [args.test,]
-            exitcode = 0
-            for test in tests:
-                try:
-                    run_test(test)
-                except AssertionError:
-                    exitcode = 1
-            sys.exit(exitcode)
-    except TestError, e:
-        print str(e)
-        sys.exit(1)
+def main():
+    """Runs the test framework."""
+    from colorama import init
+    init()
+
+    command = sys.argv[1]
+    if command == 'run':
+        args = sys.argv[2:]
+        cluster = None
+        for i in range(len(args)):
+            if args[i] == '-c' or args[i] == '--cluster':
+                cluster = args[i+1]
+                del args[i]
+                del args[i]
+        set_cluster(cluster)
+
+        from pytest import main
+        sys.exit(main(args))
     else:
-        sys.exit(0)
-
-if __name__ == '__main__':
-    _import_colorizor()
-    _import_tests()
-    run()
+        args = _create_parser().parse_args()
+        try:
+            if args.action == 'setup':
+                Cluster(args.name).setup(args.nodes, args.subnet)
+            elif args.action == 'teardown':
+                cluster = get_cluster(args.name)
+                cluster.teardown()
+                cluster.cleanup()
+            elif args.action == 'add-node':
+                get_cluster(args.cluster).add_node(args.type)
+            elif args.action == 'remove-node':
+                get_cluster(args.cluster).remove_node(args.node)
+            elif args.action == 'cluster-info':
+                print get_cluster(args.cluster)
+            elif args.action == 'logs':
+                print get_cluster(args.cluster).node(args.node).logs()
+        except TestError, e:
+            print str(e)
+            sys.exit(1)
+        else:
+            sys.exit(0)
