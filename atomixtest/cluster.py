@@ -55,16 +55,18 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, subnet='172.18.0.0/16', gateway=None):
+    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
         # Set up the test network.
-        self.network.setup(subnet, gateway)
+        self.network.setup(supernet, subnet, gateway)
 
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
             Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup()
+
+        self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
         return self.nodes()
 

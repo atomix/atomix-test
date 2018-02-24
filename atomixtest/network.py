@@ -43,8 +43,22 @@ class Network(object):
             if host not in ips:
                 yield host
 
-    def setup(self, subnet='172.18.0.0/16', gateway=None):
+    def setup(self, supernet='172.18.0.0/16', subnet=None, gateway=None):
         """Sets up the network."""
+        def find_subnet():
+            docker_subnets = []
+            for network in self._docker_client.networks.list():
+                network_info = self._docker_api_client.inspect_network(network.name)
+                if len(network_info['IPAM']['Config']) > 0:
+                    docker_subnets.append(str(network_info['IPAM']['Config'][0]['Subnet']))
+            for subnet in IPv4Network(unicode(supernet)).subnets(new_prefix=24):
+                if str(subnet) not in docker_subnets:
+                    return str(subnet)
+            raise UnknownNetworkError("Cannot find available subnet from supernet {}".format(supernet))
+
+        if subnet is None:
+            subnet = find_subnet()
+
         self._hosts = iter([str(host) for host in IPv4Network(unicode(subnet)).hosts()])
         if gateway is None:
             gateway = str(next(self._hosts))
