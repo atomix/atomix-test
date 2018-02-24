@@ -1,6 +1,5 @@
 from atomixtest.logger import log
 from atomixtest.cluster import cluster, node, Node
-import time
 
 def test_test():
     """Test test"""

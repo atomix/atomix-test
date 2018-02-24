@@ -1,6 +1,6 @@
 from logger import Logger
 from errors import UnknownNetworkError
-from ipaddress import IPv4Network
+from ipaddress import IPv4Network, IPv4Interface
 import docker
 from docker.api.client import APIClient
 from docker.utils import kwargs_from_env
@@ -23,11 +23,11 @@ class Network(object):
 
     @property
     def subnet(self):
-        return self._docker_api_client.inspect_network(self.name)['IPAM']['Config'][0]['Subnet']
+        return str(self._docker_api_client.inspect_network(self.name)['IPAM']['Config'][0]['Subnet'])
 
     @property
     def gateway(self):
-        return self._docker_api_client.inspect_network(self.name)['IPAM']['Config'][0]['Gateway']
+        return str(self._docker_api_client.inspect_network(self.name)['IPAM']['Config'][0]['Gateway'])
 
     @property
     def hosts(self):
@@ -37,13 +37,11 @@ class Network(object):
 
     def _create_hosts_iterator(self):
         """Creates a host iterator from available hosts by inspecting existing containers attached to the network."""
-        hosts = [str(host) for host in IPv4Network(unicode(self.subnet)).hosts()]
-        next_index = 0
-        if hosts[0] == self.gateway:
-            next_index += 1
-        ips = [container['IPv4Address'] for container in self._docker_api_client.inspect_network(self.name)['Containers'].values()]
-        available = [host for host in hosts if host not in ips]
-        return iter(available)
+        ips = set([self.gateway] + [str(IPv4Interface(container['IPv4Address']).ip) for container in self._docker_api_client.inspect_network(self.name)['Containers'].values()])
+        for host in IPv4Network(unicode(self.subnet)).hosts():
+            host = str(host)
+            if host not in ips:
+                yield host
 
     def setup(self, subnet='172.18.0.0/16', gateway=None):
         """Sets up the network."""
