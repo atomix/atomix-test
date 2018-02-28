@@ -80,6 +80,12 @@ def corrupt(args):
 def restore(args):
     get_cluster(args.cluster).network.restore(args.node)
 
+def stress(args):
+    get_cluster(args.cluster).stress(args.node, args.timeout, args.cpu, args.io, args.memory, args.hdd)
+
+def destress(args):
+    get_cluster(args.cluster).destress(args.node)
+
 def run(args):
     from pytest import main
     sys.exit(main(args.args))
@@ -212,6 +218,20 @@ def _create_parser():
     restore_parser = cluster_subparsers.add_parser('restore', help="Restore packets to a node")
     restore_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to disrupt")
     restore_parser.set_defaults(func=restore)
+
+    stress_parser = cluster_subparsers.add_parser('stress', help="Stress a node")
+    stress_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to stress")
+    stress_parser.add_argument('-t', '--timeout', type=str, help="Timeout after N seconds")
+    stress_parser.add_argument('-c', '--cpu', type=int, help="Spawn N workers spinning on sqrt()")
+    stress_parser.add_argument('-i', '--io', type=int, help="Spawn N workers spinning on sync()")
+    stress_parser.add_argument('-m', '--memory', type=int, help="Spawn N workers spinning on malloc()/free()")
+    stress_parser.add_argument('-mb', '--memory-bytes', type=str, help="malloc() bytes per worker")
+    stress_parser.add_argument('-d', '--hdd', type=int, help="Spawn N workers spinning on write()/unlink()")
+    stress_parser.set_defaults(func=stress)
+
+    destress_parser = cluster_subparsers.add_parser('destress', help="Desress a node")
+    destress_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to destress")
+    destress_parser.set_defaults(func=destress)
 
     logs_parser = cluster_subparsers.add_parser('logs', help="Get logs for a specific node")
     logs_parser.add_argument('node', type=name_or_id, help="The node for which to retrieve logs")

@@ -112,6 +112,22 @@ class Cluster(object):
         if os.path.exists(self.path):
             shutil.rmtree(self.path)
 
+    def stress(self, node=None, timeout=None, cpu=None, io=None, memory=None, hdd=None):
+        """Creates stress on nodes in the cluster."""
+        if node is not None:
+            self.node(node).stress(timeout, cpu, io, memory, hdd)
+        else:
+            for node in self.nodes():
+                node.stress(timeout, cpu, io, memory, hdd)
+
+    def destress(self, node=None):
+        """Stops stress on node in the cluster."""
+        if node is not None:
+            self.node(node).destress()
+        else:
+            for node in self.nodes():
+                node.destress()
+
     def __str__(self):
         lines = []
         lines.append('cluster: {}'.format(self.name))
@@ -216,9 +232,21 @@ class Node(object):
 
     def run(self, *command):
         """Runs the given command in the container."""
-        command = ' '.join([shlex_quote(arg) for arg in command])
+        if len(command) > 1:
+            command = ' '.join([shlex_quote(str(arg)) for arg in command])
+        else:
+            command = command[0]
         self.log.message("Executing command '{}' on {}", command, self.name)
         return self.docker_container.exec_run(command)
+
+    def execute(self, *command):
+        """Runs the given command in the container."""
+        if len(command) > 1:
+            command = ' '.join([shlex_quote(str(arg)) for arg in command])
+        else:
+            command = command[0]
+        self.log.message("Executing command '{}' on {}", command, self.name)
+        return self.docker_container.exec_run(command, detach=True)
 
     def stop(self):
         """Stops the node."""
@@ -287,6 +315,26 @@ class Node(object):
     def restore(self):
         """Restores packets to this node to normal order."""
         self.cluster.network.restore(self.name)
+
+    def stress(self, timeout=None, cpu=None, io=None, memory=None, hdd=None):
+        """Creates stress on the node."""
+        command = ['stress']
+
+        def maybe_append(name, arg):
+            if arg is not None:
+                command.append('--{}'.format(name))
+                command.append(arg)
+
+        maybe_append('timeout', timeout)
+        maybe_append('cpu', cpu)
+        maybe_append('io', io)
+        maybe_append('vm', memory)
+        maybe_append('hdd', hdd)
+        self.execute(*command)
+
+    def destress(self):
+        """Stops stress on a node."""
+        self.run("pkill -f stress")
 
     def teardown(self):
         """Tears down the node."""
