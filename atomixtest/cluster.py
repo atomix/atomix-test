@@ -55,7 +55,7 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None):
+    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
@@ -64,7 +64,7 @@ class Cluster(object):
 
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
-            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup()
+            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory)
 
         self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
@@ -192,7 +192,7 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self):
+    def setup(self, cpu=None, memory=None):
         """Sets up the node."""
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
@@ -209,7 +209,9 @@ class Node(object):
             network=self.cluster.network.name,
             ports={self.http_port: self._find_open_port()},
             detach=True,
-            volumes={self.path: {'bind': '/data', 'mode': 'rw'}})
+            volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
+            cpuset_cpus=cpu,
+            mem_limit=memory)
         self.client = AtomixClient(port=self.local_port)
 
     def run(self, *command):
