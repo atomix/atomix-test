@@ -240,43 +240,43 @@ class Node(object):
 
     def partition(self, node):
         """Partitions this node from the given node."""
-        self.cluster.network.partition(self, node)
+        self.cluster.network.partition(self.name, node.name)
 
     def heal(self, node):
         """Heals a partition between this node and the given node."""
-        self.cluster.network.heal(self, node)
+        self.cluster.network.heal(self.name, node.name)
 
     def isolate(self):
         """Isolates this node from all other nodes in the cluster."""
-        self.cluster.network.isolate(self)
+        self.cluster.network.isolate(self.name)
 
     def unisolate(self):
         """Unisolates this node from all other nodes in the cluster."""
-        self.cluster.network.unisolate(self)
+        self.cluster.network.unisolate(self.name)
 
     def delay(self, latency=50, jitter=10, correlation=.75, distribution='normal'):
         """Delays packets to this node."""
-        self.cluster.network.delay(self, latency, jitter, correlation, distribution)
+        self.cluster.network.delay(self.name, latency, jitter, correlation, distribution)
 
     def drop(self, probability=.02, correlation=.25):
         """Drops packets to this node."""
-        self.cluster.network.drop(self, probability, correlation)
+        self.cluster.network.drop(self.name, probability, correlation)
 
     def reorder(self, probability=.02, correlation=.5):
         """Reorders packets to this node."""
-        self.cluster.network.reorder(self, probability, correlation)
+        self.cluster.network.reorder(self.name, probability, correlation)
 
     def duplicate(self, probability=.005, correlation=.05):
         """Duplicates packets to this node."""
-        self.cluster.network.duplicate(self, probability, correlation)
+        self.cluster.network.duplicate(self.name, probability, correlation)
 
     def corrupt(self, probability=.02):
         """Duplicates packets to this node."""
-        self.cluster.network.corrupt(self, probability)
+        self.cluster.network.corrupt(self.name, probability)
 
     def restore(self):
         """Restores packets to this node to normal order."""
-        self.cluster.network.restore(self)
+        self.cluster.network.restore(self.name)
 
     def teardown(self):
         """Tears down the node."""
