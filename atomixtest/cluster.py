@@ -145,6 +145,26 @@ class Cluster(object):
         return '\n'.join(lines)
 
 
+class _ConfiguredCluster(Cluster):
+    def __init__(self, name, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
+        super(_ConfiguredCluster, self).__init__(name)
+        self._nodes = nodes
+        self._supernet = supernet
+        self._subnet = subnet
+        self._gateway = gateway
+        self._cpu = cpu
+        self._memory = memory
+
+    def setup(self):
+        super(_ConfiguredCluster, self).setup(self._nodes, self._supernet, self._subnet, self._gateway, self._cpu, self._memory)
+
+    def __enter__(self):
+        self.setup()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.teardown()
+
+
 class Node(object):
     """Atomix test node."""
     class Type(object):
@@ -357,6 +377,11 @@ class Node(object):
         """Waits for the node to exit."""
         self.docker_container.wait()
 
+
+def create_cluster(name, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
+    return _ConfiguredCluster(name, nodes, supernet, subnet, gateway, cpu, memory)
+
+
 def _find_cluster():
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
@@ -367,8 +392,10 @@ def _find_cluster():
         return Cluster(cluster_name)
     raise UnknownClusterError(None)
 
+
 def get_cluster(name=None):
     return Cluster(name) if name is not None else _find_cluster()
+
 
 def get_clusters():
     docker_client = docker.from_env()

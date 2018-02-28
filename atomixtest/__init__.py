@@ -3,8 +3,15 @@ from logger import log
 
 def with_cluster(name=None, nodes=3, clients=0, supernet='172.18.0.0/16', subnet=None, gateway=None):
     """Decorator for passing a cluster into a function."""
+    def get_name(f):
+        if name is None:
+            return f.__name__
+        elif callable(name):
+            return name()
+        return name
+
     def wrap(f):
-        cluster = Cluster(name if name is not None else f.__name__)
+        cluster = Cluster(get_name(f))
         def new_func():
             try:
                 cluster.setup(nodes, supernet, subnet, gateway)
