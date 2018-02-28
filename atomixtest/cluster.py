@@ -169,6 +169,14 @@ class Node(object):
         return port
 
     @property
+    def id(self):
+        return int(self.name.split('-')[-1])
+
+    @property
+    def status(self):
+        return self.docker_container.status
+
+    @property
     def local_port(self):
         port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
         return port_bindings['{}/tcp'.format(self.http_port)][0]['HostPort']

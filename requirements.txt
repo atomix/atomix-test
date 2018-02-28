@@ -2,3 +2,4 @@ atomix=1.0
 docker
 pytest
 six
+terminaltables=3.1.0

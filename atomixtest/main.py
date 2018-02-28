@@ -1,4 +1,5 @@
 from cluster import get_cluster, get_clusters, Cluster
+from utils import clusters_to_str, cluster_to_str
 from errors import TestError
 import sys
 
@@ -17,13 +18,16 @@ def remove_node(args):
     get_cluster(args.cluster).remove_node(args.node)
 
 def list_clusters(args):
-    print '\n'.join([cluster.name for cluster in get_clusters()])
+    print clusters_to_str(get_clusters())
 
 def cluster_info(args):
     if args.cluster is not None:
         print get_cluster(args.cluster)
     else:
         print '\n'.join([str(cluster) for cluster in get_clusters()])
+
+def cluster_nodes(args):
+    print cluster_to_str(get_cluster(args.cluster))
 
 def stop(args):
     get_cluster(args.cluster).node(args.node).stop()
@@ -129,6 +133,9 @@ def _create_parser():
 
     cluster_info_parser = cluster_subparsers.add_parser('info', help="Get information about a test cluster")
     cluster_info_parser.set_defaults(func=cluster_info)
+
+    cluster_nodes_parser = cluster_subparsers.add_parser('nodes', help="List information about all nodes in the cluster")
+    cluster_nodes_parser.set_defaults(func=cluster_nodes)
 
     kill_parser = cluster_subparsers.add_parser('stop', help="Stop a node")
     kill_parser.add_argument('node', type=name_or_id, help="The node to stop")

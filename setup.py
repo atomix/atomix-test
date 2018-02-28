@@ -8,7 +8,7 @@ setup(
     author_email='jordan.halterman@gmail.com',
     url='http://github.com/atomix/atomix-test',
     packages=['atomixtest'],
-    install_requires=['atomix', 'docker', 'pytest', 'six'],
+    install_requires=['atomix', 'docker', 'pytest', 'six', 'terminaltables>=3.1.0'],
     extras_require={
         ':python_version=="2.6"': [
             'argparse>=1.1',
