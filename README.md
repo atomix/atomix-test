@@ -1,9 +1,15 @@
 # Atomix test framework
 
 This project is a framework for deploying Docker-based [Atomix](http://github.com/atomix/atomix)
-clusters for testing and running systems tests. The test framework supports node/network
-fault injection, deploying and scaling Atomix clusters, and operating on all types of
-primitives.
+clusters for systems/fault injection/load testing. The test framework supports:
+* Setup Docker-based test clusters
+* Teardown Docker-based test clusters
+* Add client/server nodes
+* Remove nodes
+* Kill/restart nodes
+* Create network partitions
+* Inject network latency
+* Generate load on nodes (CPU, I/O, memory, etc)
 
 ### Requirements
 
@@ -17,16 +23,19 @@ Additionally, you should build the Atomix Docker container with `docker build -t
 
 To install the test framework, run `python setup.py install`
 
+To run tests, run `python setup.py test`
+
 ## Managing test clusters
 
 The `atomix-test` script can be used to manage Atomix clusters for use in testing.
+To view a list of cluster management commands, run `atomix-test cluster -h`
 
 ### Create a new test cluster
 
 To create a new test cluster, use the `setup` command:
 
 ```
-> atomix-test setup my-cluster
+> atomix-test cluster my-cluster setup
 my-cluster Setting up cluster
 my-cluster Creating network
 my-cluster Running container my-cluster-1
@@ -38,7 +47,7 @@ my-cluster Waiting for cluster bootstrap
 To configure the cluster with more than three nodes, pass a `--nodes` or `-n` argument:
 
 ```
-> atomix-test setup my-cluster -n 5
+> atomix-test cluster my-cluster setup -n 5
 ```
 
 Running the `setup` command will set up a new Docker network and a set of containers.
@@ -61,40 +70,26 @@ CONTAINER ID        IMAGE               COMMAND                  CREATED        
 
 ### List cluster info
 
-To get a list of the currently running test clusters, use the `clusters` command:
+To get a list of the currently running test clusters, use the `list` command:
 
 ```
-> atomix-test clusters
+> atomix-test cluster list
 my-cluster
 my-other-cluster
 ```
 
-To list detailed information about a cluster, use the `cluster-info` command:
+To list the nodes in a cluster, use the `nodes` command:
 
 ```
-> atomix-test cluster-info my-cluster
-cluster: my-cluster
-network:
-  name: my-cluster
-  subnet: 172.18.0.0/24
-  gateway: 172.18.0.1
-nodes:
-  my-cluster-1:
-    state: running
-    type: server
-    ip: 172.18.0.2
-    host port: 50217
-  my-cluster-2:
-    state: running
-    type: server
-    ip: 172.18.0.3
-    host port: 50218
-  my-cluster-3:
-    state: running
-    type: server
-    ip: 172.18.0.4
-    host port: 50219
+> atomix-test cluster my-cluster nodes
+ID     NAME             STATUS      IP             LOCAL PORT
+1      my-cluster-1     running     172.18.0.2     61170
+2      my-cluster-2     running     172.18.0.3     61171
+3      my-cluster-3     running     172.18.0.4     61172
 ```
+
+The port listed under `LOCAL PORT` is the `localhost` port on which the Atomix HTTP
+server is running.
 
 The Docker engine is treated as the source of truth for test cluster info. The `atomix-test`
 script inspects running Docker containers and networks to determine which test clusters are
@@ -105,13 +100,13 @@ running.
 To add a node to a cluster, use the `add-node` command:
 
 ```
-> atomix-test add-node my-cluster
+> atomix-test cluster my-cluster add-node
 ```
 
 To remove a node from a cluster, use the `remove-node` command, passing the node ID as the last argument:
 
 ```
-> atomix-test remove-node my-cluster-4
+> atomix-test cluster my-cluster remove-node 4
 ```
 
 ### Shutdown a cluster
@@ -119,7 +114,7 @@ To remove a node from a cluster, use the `remove-node` command, passing the node
 To shutdown a cluster, use the `teardown` command:
 
 ```
-> atomix-test teardown my-cluster
+> atomix-test cluster my-cluster teardown
 my-cluster Tearing down cluster
 my-cluster Stopping container my-cluster-1
 my-cluster Removing container my-cluster-1
@@ -145,8 +140,10 @@ def test_map(cluster):
   pass
 ```
 
-The `Cluster` object provided to tests has APIs for managing and accessing the test
-network, cluster, and nodes.
+By default, a cluster with the same name as the test function - e.g. `test_map` - will be
+started prior to running the test method and will be torn down afterwards. The `Cluster`
+object provided to tests has APIs for managing and accessing the test network, cluster,
+and nodes.
 
 ### Managing clusters
 
@@ -161,6 +158,7 @@ def test_resize(cluster):
   # Add a client node to the cluster
   cluster.add_node(type='client')
 
+  # Remove a node from the cluster
   cluster.remove_node(4)
 ```
 
@@ -186,8 +184,8 @@ def test_map(cluster):
 
 ### Fault injection
 
-The `Network` and `Node` objects have various methods for injecting network and node
-failures in tests.
+The `Cluster`, `Network` and `Node` objects have various methods for injecting network
+and node failures in tests.
 
 ```python
 @with_cluster(nodes=3)
@@ -211,7 +209,109 @@ def test_map(cluster):
   cluster.node(1).delay(latency=100)
 ```
 
-### Accessing primitives
+Fault injection methods also support a context manager that can be used to encapsulate
+blocks of code to be executed during the failure.
+
+```python
+@with_cluster(nodes=3)
+def test_map(cluster):
+  node1 = cluster.node(1)
+  node2 = cluster.node(2)
+
+  # Test writing to a map with the cluster under load.
+  with cluster.stress(cpu=4):
+    node1.map('test-map').put('foo', 'bar')
+  
+  # Test that a map can be read from node 2 while node 1 is partitioned.
+  with node1.isolate():
+    assert node2.map('test-map').get('foo')['value'] == 'bar'
+```
+
+### Cluster
+
+The `Cluster` object supports the following properties and methods:
+* `path` - the host path in which Atomix data is persisted
+* `network` - the `Network` used to communicate across nodes in the cluster
+* `node(id)` - returns a `Node` object by `int` ID or `str` name
+* `nodes(type=None)` - returns a list of all nodes in the cluster of the given `type`
+* `servers()` - returns a list of all `server` type nodes in the cluster
+* `clients()` - returns a list of all `client` type nodes in the cluster
+* `setup(nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None)` - sets up a new cluster
+* `add_node(type='server')` - adds a new node to the cluster
+* `remove_node(id)` - removes a node by `int` ID or `str` name
+* `teardown()` - tears down the cluster
+* `stress(node=None, timeout=None, cpu=None, io=None, memory=None, hdd=None)` - stresses all nodes in the cluster
+* `destress()` - kills stressors on all nodes in the cluster
+
+### Network
+
+The `Network` object can be accessed via `Cluster.network` and supports the following
+properties and methods:
+* `setup(supernet='172.18.0.0/16', subnet=None, gateway=None)` - sets up the network,
+creating a new Docker network with a subnet in the given `supernet`
+* `teardown()` - tears down the network, removing the Docker network
+* `partition(local, remote=None)` - partitions the given `local` node from the given `remote`
+node or from all nodes in the network if `remote` is `None`. `local` and `remote` must be
+node names or IDs.
+* `unipartition(local, remote=None)` - creates a uni-directional partition from the given
+`local` node to the given `remote` node or to all nodes in the network if `remote`
+is `None`. `local` and `remote` must be node names or IDs.
+* `bipartition(local, remote=None)` - partitions the given `local` node from the given `remote`
+node or from all nodes in the network if `remote` is `None`. `local` and `remote` must be
+node names or IDs.
+* `heal(local=None, remote=None)` - heals a partition from the given `local` node to the given
+`remote` node. If the `remote` node is `None`, all partitions from the given `local` are removed.
+If `local` is `None` then all partitions in the cluster are healed. `local` and `remote` must be
+node names or IDs.
+* `partition_halves()` - partitions the cluster into two halves using bi-directional partitions
+* `partition_random()` - partitions a random node from all other nodes in the cluster
+* `partition_bridge(node=None)` - partitions the cluster into two halves with a single "bridge"
+node able to see each side of the partition. If the given `node` is `None` then the bridge
+node will be selected randomly.
+* `partition_isolate(node=None)` - partitions a node from all other nodes in the cluster.
+If the given node is `None` then a random node will be selected.
+* `delay(node=None, latency=50, jitter=10, correlation=.75, distribution='normal')` - delays
+packets to the given node or to all nodes if `node` is `None`
+* `drop(node=None, probability=.02, correlation=.25)` - drops packets to the given node
+or to all nodes if `node` is `None`
+* `reorder(node=None, probability=.02, correlation=.5)` - reorders packets to the given node
+or to all nodes if `node` is `None`
+* `duplicate(node=None, probability=.005, correlation=.05)` - delays packets to the given
+node or to all nodes if `node` is `None`
+* `corrupt(node=None, probability=.02)` - delays packets to the given node or to all nodes
+if `node` is `None`
+* `restore(node=None)` - restores all traffic to the given node or to all nodes if
+`node` is `None`
+
+### Node
+
+The `Node` object can be accessed via `Cluster.node(id)` and supports the following
+properties and methods:
+* `id`
+* `status`
+* `local_port`
+* `logs()`
+* `setup(cpu=None, memory=None)`
+* `teardown()`
+* `run(*command)`
+* `execute(*command)`
+* `stop()`
+* `start()`
+* `kill()`
+* `recover()`
+* `restart()`
+* `partition(node)`
+* `heal(node)`
+* `isolate(node)`
+* `unisolate(node)`
+* `delay(latency=50, jitter=10, correlation=.75, distribution='normal')`
+* `drop(probability=.02, correlation=.25)`
+* `reorder(probability=.02, correlation=.5)`
+* `duplicate(probability=.005, correlation=.05)`
+* `corrupt(probability=.02)`
+* `restore(self)`
+* `stress(timeout=None, cpu=None, io=None, memory=None, hdd=None)`
+* `destress()`
 
 ### Running tests
 
