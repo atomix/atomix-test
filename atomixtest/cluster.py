@@ -2,6 +2,7 @@ from network import Network
 from atomix import AtomixClient
 from logger import Logger
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
+from utils import with_context
 from six.moves import shlex_quote
 import shutil
 import os
@@ -68,7 +69,7 @@ class Cluster(object):
 
         self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
-        return self.nodes()
+        return self
 
     def add_node(self, type='server'):
         """Adds a new node to the cluster."""
@@ -115,10 +116,12 @@ class Cluster(object):
     def stress(self, node=None, timeout=None, cpu=None, io=None, memory=None, hdd=None):
         """Creates stress on nodes in the cluster."""
         if node is not None:
-            self.node(node).stress(timeout, cpu, io, memory, hdd)
+            return self.node(node).stress(timeout, cpu, io, memory, hdd)
         else:
+            contexts = []
             for node in self.nodes():
-                node.stress(timeout, cpu, io, memory, hdd)
+                contexts.append(node.stress(timeout, cpu, io, memory, hdd))
+            return with_context(*contexts)
 
     def destress(self, node=None):
         """Stops stress on node in the cluster."""
@@ -127,6 +130,9 @@ class Cluster(object):
         else:
             for node in self.nodes():
                 node.destress()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.teardown()
 
     def __str__(self):
         lines = []
@@ -160,9 +166,6 @@ class _ConfiguredCluster(Cluster):
 
     def __enter__(self):
         self.setup()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.teardown()
 
 
 class Node(object):
@@ -249,6 +252,7 @@ class Node(object):
             cpuset_cpus=cpu,
             mem_limit=memory)
         self.client = AtomixClient(port=self.local_port)
+        return self
 
     def run(self, *command):
         """Runs the given command in the container."""
@@ -298,43 +302,43 @@ class Node(object):
 
     def partition(self, node):
         """Partitions this node from the given node."""
-        self.cluster.network.partition(self.name, node.name)
+        return self.cluster.network.partition(self.name, node.name)
 
     def heal(self, node):
         """Heals a partition between this node and the given node."""
-        self.cluster.network.heal(self.name, node.name)
+        return self.cluster.network.heal(self.name, node.name)
 
     def isolate(self):
         """Isolates this node from all other nodes in the cluster."""
-        self.cluster.network.isolate(self.name)
+        return self.cluster.network.partition(self.name)
 
     def unisolate(self):
         """Unisolates this node from all other nodes in the cluster."""
-        self.cluster.network.unisolate(self.name)
+        return self.cluster.network.heal(self.name)
 
     def delay(self, latency=50, jitter=10, correlation=.75, distribution='normal'):
         """Delays packets to this node."""
-        self.cluster.network.delay(self.name, latency, jitter, correlation, distribution)
+        return self.cluster.network.delay(self.name, latency, jitter, correlation, distribution)
 
     def drop(self, probability=.02, correlation=.25):
         """Drops packets to this node."""
-        self.cluster.network.drop(self.name, probability, correlation)
+        return self.cluster.network.drop(self.name, probability, correlation)
 
     def reorder(self, probability=.02, correlation=.5):
         """Reorders packets to this node."""
-        self.cluster.network.reorder(self.name, probability, correlation)
+        return self.cluster.network.reorder(self.name, probability, correlation)
 
     def duplicate(self, probability=.005, correlation=.05):
         """Duplicates packets to this node."""
-        self.cluster.network.duplicate(self.name, probability, correlation)
+        return self.cluster.network.duplicate(self.name, probability, correlation)
 
     def corrupt(self, probability=.02):
         """Duplicates packets to this node."""
-        self.cluster.network.corrupt(self.name, probability)
+        return self.cluster.network.corrupt(self.name, probability)
 
     def restore(self):
         """Restores packets to this node to normal order."""
-        self.cluster.network.restore(self.name)
+        return self.cluster.network.restore(self.name)
 
     def stress(self, timeout=None, cpu=None, io=None, memory=None, hdd=None):
         """Creates stress on the node."""
@@ -351,6 +355,7 @@ class Node(object):
         maybe_append('vm', memory)
         maybe_append('hdd', hdd)
         self.execute(*command)
+        return with_context(lambda: self.destress())
 
     def destress(self):
         """Stops stress on a node."""
@@ -364,9 +369,9 @@ class Node(object):
         self.log.message("Removing container {}", self.name)
         container.remove()
 
-    def wait_for_start(self):
+    def wait_for_start(self, timeout=60):
         """Waits for the node to finish startup."""
-        for _ in range(30):
+        for _ in range(timeout):
             if not self.client.status():
                 time.sleep(1)
             else:
@@ -376,6 +381,9 @@ class Node(object):
     def wait_for_stop(self):
         """Waits for the node to exit."""
         self.docker_container.wait()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.teardown()
 
 
 def create_cluster(name, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):

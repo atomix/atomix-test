@@ -1,5 +1,6 @@
 from logger import Logger
 from errors import UnknownNetworkError
+from utils import with_context
 from ipaddress import IPv4Network, IPv4Interface
 import random
 import docker
@@ -95,19 +96,19 @@ class Network(object):
             for name, ip in self._interfaces():
                 if name != local:
                     disruptions.append(self._partition(local, name))
-            return NetworkDisruption(*disruptions)
+            return with_context(*disruptions)
 
     def bipartition(self, node1, node2=None):
         """Creates a bi-directional partition between the two nodes."""
         node1, node2 = self._get_node(node1), self._get_node(node2)
         if node2 is not None:
-            return NetworkDisruption(self._partition(node1, node2), self._partition(node2, node1))
+            return with_context(self._partition(node1, node2), self._partition(node2, node1))
         else:
             disruptions = []
             for name, ip in self._interfaces():
                 if name != node1:
                     disruptions.append(self.bipartition(node1, name))
-            return NetworkDisruption(*disruptions)
+            return with_context(*disruptions)
 
     def heal(self, local=None, remote=None):
         """Heals partitions."""
@@ -136,7 +137,7 @@ class Network(object):
                 for j in range(len(ips)):
                     if i != j and j % 2 == 1:
                         disruptions.append(self.bipartition(ips[i][0], ips[j][0]))
-        return NetworkDisruption(*disruptions)
+        return with_context(*disruptions)
 
     def partition_random(self):
         """Partitions a random node."""
@@ -144,7 +145,7 @@ class Network(object):
         node2 = self._random_interface()[0]
         while node1 == node2:
             node2 = self._random_interface()
-        return NetworkDisruption(self.bipartition(node1, node2))
+        return with_context(self.bipartition(node1, node2))
 
     def partition_bridge(self, node=None):
         """Partitions a node as a bridge to two sides of a cluster."""
@@ -160,7 +161,7 @@ class Network(object):
                 for j in range(len(interfaces)):
                     if i != j and j % 2 == 1 and interfaces[j][0] != node:
                         disruptions.append(self.bipartition(interfaces[i][0], interfaces[j][0]))
-        return NetworkDisruption(*disruptions)
+        return with_context(*disruptions)
 
     def partition_isolate(self, node=None):
         """Isolates the given node from all its peers."""
@@ -173,36 +174,36 @@ class Network(object):
         for name, ip in self._interfaces():
             if name != node:
                 disruptions.append(self.bipartition(node, name))
-        return NetworkDisruption(*disruptions)
+        return with_context(*disruptions)
 
     def delay(self, node=None, latency=50, jitter=10, correlation=.75, distribution='normal'):
         """Delays packets to the given node."""
         if node is None:
-            return NetworkDisruption(*[self._delay(name, latency, jitter, correlation, distribution) for name, ip in self._interfaces()])
+            return with_context(*[self._delay(name, latency, jitter, correlation, distribution) for name, ip in self._interfaces()])
         return self._delay(self._get_node(node), latency, jitter, correlation, distribution)
 
     def drop(self, node=None, probability=.02, correlation=.25):
         """Drops packets to the given node."""
         if node is None:
-            return NetworkDisruption(*[self._drop(name, probability, correlation) for name, ip in self._interfaces()])
+            return with_context(*[self._drop(name, probability, correlation) for name, ip in self._interfaces()])
         return self._drop(self._get_node(node), probability, correlation)
 
     def reorder(self, node=None, probability=.02, correlation=.5):
         """Reorders packets to the given node."""
         if node is None:
-            return NetworkDisruption(*[self._reorder(name, probability, correlation) for name, ip in self._interfaces()])
+            return with_context(*[self._reorder(name, probability, correlation) for name, ip in self._interfaces()])
         return self._reorder(self._get_node(node), probability, correlation)
 
     def duplicate(self, node=None, probability=.005, correlation=.05):
         """Duplicates packets to the given node."""
         if node is None:
-            return NetworkDisruption(*[self._duplicate(name, probability, correlation) for name, ip in self._interfaces()])
+            return with_context(*[self._duplicate(name, probability, correlation) for name, ip in self._interfaces()])
         return self._duplicate(self._get_node(node), probability, correlation)
 
     def corrupt(self, node=None, probability=.02):
         """Duplicates packets to the given node."""
         if node is None:
-            return NetworkDisruption(*[self._corrupt(name, probability) for name, ip in self._interfaces()])
+            return with_context(*[self._corrupt(name, probability) for name, ip in self._interfaces()])
         return self._corrupt(self._get_node(node), probability)
 
     def restore(self, node=None):
@@ -217,7 +218,7 @@ class Network(object):
         """Partitions the given local from the given remote."""
         self.log.message("Cutting off link {}->{}", local, remote)
         self._run_in_container(local, '/bin/bash', 'sudo', 'iptables', '-A', 'INPUT', '-s', self._get_ip(remote), '-j', 'DROP', '-w')
-        return NetworkDisruption(lambda: self.heal(local, remote))
+        return with_context(lambda: self.heal(local, remote))
 
     def _heal(self, local, remote):
         """Heals a partition from the given local to the given remote."""
@@ -229,35 +230,35 @@ class Network(object):
         correlation = self._percentize(correlation)
         self.log.message("Delaying packets to {} (latency={}, jitter={}, correlation={}, distribution={})", node, self._millize(latency), self._millize(jitter), correlation, distribution)
         self._run_in_container(node, '/bin/bash', 'sudo', 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'delay', latency, jitter, correlation, 'distribution', distribution)
-        return NetworkDisruption(lambda: self.restore(node))
+        return with_context(lambda: self.restore(node))
 
     def _drop(self, node, probability=.02, correlation=.25):
         """Drops packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
         self.log.message("Dropping packets to {} (probability={}, correlation={})", node, probability, correlation)
         self._run_in_container(node, '/bin/bash', 'sudo', 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'loss', probability, correlation)
-        return NetworkDisruption(lambda: self.restore(node))
+        return with_context(lambda: self.restore(node))
 
     def _reorder(self, node, probability=.02, correlation=.5):
         """Reorders packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
         self.log.message("Reordering packets to {} (probability={}, correlation={})", node, probability, correlation)
         self._run_in_container(node, '/bin/bash', 'sudo', 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'reorder', probability, correlation)
-        return NetworkDisruption(lambda: self.restore(node))
+        return with_context(lambda: self.restore(node))
 
     def _duplicate(self, node, probability=.005, correlation=.05):
         """Duplicates packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
         self.log.message("Duplicating packets to {} (probability={}, correlation={})", node, probability, correlation)
         self._run_in_container(node, '/bin/bash', 'sudo', 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'duplicate', probability, correlation)
-        return NetworkDisruption(lambda: self.restore(node))
+        return with_context(lambda: self.restore(node))
 
     def _corrupt(self, node, probability=.02):
         """Duplicates packets to the given node."""
         probability = self._percentize(probability)
         self.log.message("Corrupting packets to {} (probability={})", node, probability)
         self._run_in_container(node, '/bin/bash', 'sudo', 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'corrupt', probability)
-        return NetworkDisruption(lambda: self.restore(node))
+        return with_context(lambda: self.restore(node))
 
     def _restore(self, node):
         """Restores packets to the given node to normal order."""
@@ -296,23 +297,3 @@ class Network(object):
             return '{}-{}'.format(self.name, int(name))
         except ValueError:
             return name
-
-
-class NetworkDisruption(object):
-    """A network disruption."""
-    def __init__(self, *healers):
-        self._healers = healers
-
-    def heal(self):
-        """Heals the network disruption."""
-        for healer in self._healers:
-            healer()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.heal()
-
-    def __call__(self):
-        self.heal()

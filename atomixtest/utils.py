@@ -23,3 +23,20 @@ def cluster_to_str(cluster):
     for node in cluster.nodes():
         data.append([node.id, node.name, node.status, node.ip, node.local_port])
     return _create_table(data)
+
+class Context(object):
+    def __init__(self, *contexts):
+        self._contexts = contexts
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self()
+
+    def __call__(self):
+        for context in self._contexts:
+            context()
+
+def with_context(*contexts):
+    return Context(*contexts)
