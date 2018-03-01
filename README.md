@@ -129,15 +129,28 @@ my-cluster Cleaning up cluster state
 ## Writing tests
 
 Tests are written and run using [pytest](https://docs.pytest.org/en/latest/), which relies
-primarily on simple `assert` statements. Additionally, the test framework provides a
-`@with_cluster` decorator which can be used to instantiate per-test clusters:
+primarily on simple `assert` statements.
+
+To create a cluster in a test, use the `create_cluster` function:
+
+```python
+from atomixtest.cluster import create_cluster
+
+with create_cluster('test', nodes=3) as cluster:
+  node = cluster.node(1)
+  ...
+```
+
+Alternatively, the test framework provides a `@with_cluster` decorator which can be used
+to inject per-test clusters:
 
 ```python
 from atomixtest import with_cluster
 
 @with_cluster(nodes=3)
 def test_map(cluster):
-  pass
+  node = cluster.node(1)
+  ...
 ```
 
 By default, a cluster with the same name as the test function - e.g. `test_map` - will be
@@ -205,8 +218,9 @@ def test_map(cluster):
   # Partition one node from another node
   cluster.node(1).partition(cluster.node(2))
 
-  # Inject latency on a specific node
-  cluster.node(1).delay(latency=100)
+  # Inject latency in the network and attempt to write to a map
+  with cluster.network.delay(latency=100):
+    cluster.node(2).map('test-map').put('bar', 'baz')
 ```
 
 Fault injection methods also support a context manager that can be used to encapsulate
@@ -287,28 +301,33 @@ if `node` is `None`
 
 The `Node` object can be accessed via `Cluster.node(id)` and supports the following
 properties and methods:
-* `id`
-* `status`
-* `local_port`
-* `logs()`
-* `setup(cpu=None, memory=None)`
-* `teardown()`
-* `run(*command)`
-* `execute(*command)`
-* `stop()`
-* `start()`
-* `kill()`
-* `recover()`
-* `restart()`
-* `partition(node)`
-* `heal(node)`
-* `isolate(node)`
-* `unisolate(node)`
-* `delay(latency=50, jitter=10, correlation=.75, distribution='normal')`
-* `drop(probability=.02, correlation=.25)`
-* `reorder(probability=.02, correlation=.5)`
-* `duplicate(probability=.005, correlation=.05)`
-* `corrupt(probability=.02)`
+* `id` - the `int` ID of the node
+* `status` - the `str` status of the node provided by the underlying Docker container
+* `local_port` - the `localhost` port on which the Atomix HTTP server is listening
+* `logs()` - returns the Atomix logs for the node
+* `setup(cpu=None, memory=None)` - sets up the node, passing the `cpu` and `memory`
+to Docker at setup
+* `teardown()` - tears down the node, removing the Docker container
+* `run(*command)` - runs a command in the Docker container
+* `execute(*command)` - runs a command in the Docker container, detaching from the shell
+* `stop()` - stops the Docker container using `docker stop`
+* `start()` - starts the Docker container using `docker start`
+* `kill()` - kills the Docker container using `docker kill`
+* `recover()` - restarts a dead Docker container using `docker start`
+* `restart()` - restarts the Docker container using `docker restart`
+* `partition(node)` - partitions the node from the given `node` using a bi-directional partition
+* `heal(node)` - heals a partition from this node to the given `node`
+* `isolate()` - isolates this node from all other nodes in the cluster
+* `unisolate()` - heals an isolation from all other nodes in the cluster
+* `delay(latency=50, jitter=10, correlation=.75, distribution='normal')` - delays packets
+to the node with the given `latency` in millseconds
+* `drop(probability=.02, correlation=.25)` - drops packets to the node with the given
+`probability`
+* `reorder(probability=.02, correlation=.5)` - reorders packets to the node with the given
+`probability`
+* `duplicate(probability=.005, correlation=.05)` - duplicates packets to the node with
+the given `probability`
+* `corrupt(probability=.02)` - corrupts packets to the node with the given `probability`
 * `restore(self)`
 * `stress(timeout=None, cpu=None, io=None, memory=None, hdd=None)`
 * `destress()`

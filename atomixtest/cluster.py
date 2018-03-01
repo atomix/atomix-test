@@ -382,6 +382,9 @@ class Node(object):
         """Waits for the node to exit."""
         self.docker_container.wait()
 
+    def __enter__(self):
+        return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.teardown()
 
