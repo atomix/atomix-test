@@ -4,7 +4,17 @@ from errors import TestError
 import sys
 
 def setup(args):
-    Cluster(args.cluster).setup(args.nodes, subnet=args.subnet, gateway=args.gateway, cpu=args.cpu, memory=args.memory_limit, profiling=args.profiling)
+    Cluster(args.cluster).setup(
+        args.nodes,
+        subnet=args.subnet,
+        gateway=args.gateway,
+        cpu=args.cpu,
+        memory=args.memory_limit,
+        profiling=args.profiling,
+        log_level=args.log_level,
+        console_log_level=args.console_level,
+        file_log_level=args.file_level
+    )
 
 def teardown(args):
     cluster = get_cluster(args.cluster)
@@ -141,6 +151,9 @@ def _create_parser():
     setup_parser.add_argument('-c', '--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
     setup_parser.add_argument('-m', '--memory-limit', help="The per-container memory limit")
     setup_parser.add_argument('-p', '--profiling', action='store_true', default=False, help="Enable profiling")
+    setup_parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
+    setup_parser.add_argument('-o', '--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
+    setup_parser.add_argument('-f', '--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
     setup_parser.set_defaults(func=setup)
 
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")

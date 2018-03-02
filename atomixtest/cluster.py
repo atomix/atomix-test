@@ -72,7 +72,7 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False):
+    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
@@ -81,7 +81,7 @@ class Cluster(object):
 
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
-            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory, profiling)
+            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory, profiling, log_level, console_log_level, file_log_level)
 
         self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
@@ -257,7 +257,7 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, cpu=None, memory=None, profiling=False):
+    def setup(self, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
@@ -268,6 +268,17 @@ class Node(object):
         ports = {self.http_port: self._find_open_port()}
         if profiling:
             ports[10001] = self._find_open_port()
+
+        log_levels = ('trace', 'debug', 'info', 'warn', 'error')
+        def find_index(level):
+            for i in range(len(log_levels)):
+                if log_levels[i] == level:
+                    return i
+
+        if find_index(console_log_level) < find_index(log_level):
+            log_level = console_log_level
+        if find_index(file_log_level) < find_index(log_level):
+            log_level = file_log_level
 
         self.log.message("Running container {}", self.name)
         self._docker_client.containers.run(
@@ -281,7 +292,12 @@ class Node(object):
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
             cpuset_cpus=cpu,
             mem_limit=memory,
-            environment={'profile': 'true' if profiling else 'false'})
+            environment={
+                'profile': 'true' if profiling else 'false',
+                'log_level': log_level.upper(),
+                'console_log_level': console_log_level.upper(),
+                'file_log_level': file_log_level.upper()
+            })
         self.client = AtomixClient(port=self.local_port)
         return self
 
