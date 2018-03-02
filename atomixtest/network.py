@@ -267,7 +267,7 @@ class Network(object):
 
     def _run_in_container(self, node, *command):
         command = ' '.join([shlex_quote(str(arg)) for arg in command])
-        print self._get_container(node).exec_run(command)
+        self._get_container(node).exec_run(command)
 
     def _percentize(self, d, digits=2):
         return '{}%'.format(round(d * 100, digits))

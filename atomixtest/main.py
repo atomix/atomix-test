@@ -91,6 +91,9 @@ def partition_bridge(args):
 def partition_isolate(args):
     get_cluster(args.cluster).network.partition_isolate(args.node)
 
+def heal(args):
+    get_cluster(args.cluster).network.heal(args.local, args.remote)
+
 def delay(args):
     get_cluster(args.cluster).network.delay(args.node, args.latency, args.jitter, args.correlation, args.distribution)
 
@@ -218,6 +221,11 @@ def _create_parser():
     partition_isolate_parser = cluster_subparsers.add_parser('partition-isolate', help="Isolate a node in the cluster")
     partition_isolate_parser.add_argument('node', type=name_or_id, nargs='?', help="The node to isolate")
     partition_isolate_parser.set_defaults(func=partition_isolate)
+
+    heal_parser = cluster_subparsers.add_parser('heal', help="Heal a partition")
+    heal_parser.add_argument('local', type=name_or_id, nargs='?', help="The node to heal")
+    heal_parser.add_argument('remote', type=name_or_id, nargs='?', help="The remote to heal")
+    heal_parser.set_defaults(func=heal)
 
     delay_parser = cluster_subparsers.add_parser('delay', help="Delay packets to a node")
     delay_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to disrupt")
