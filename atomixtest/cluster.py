@@ -299,6 +299,7 @@ class Node(object):
             ' '.join([str(arg) for arg in args]),
             name=self.name,
             labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-type': self.type},
+            cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
             ports=ports,
             detach=True,
