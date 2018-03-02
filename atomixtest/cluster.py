@@ -136,7 +136,7 @@ class Cluster(object):
     def shutdown(self):
         """Shuts down the cluster."""
         for node in self.nodes():
-            node.stop()
+            node.kill()
 
     def startup(self):
         """Starts up the cluster."""
@@ -451,6 +451,10 @@ class Node(object):
     def destress(self):
         """Stops stress on a node."""
         self.run("pkill -f stress")
+
+    def remove(self):
+        """Removes the node from the cluster."""
+        self.teardown()
 
     def teardown(self):
         """Tears down the node."""

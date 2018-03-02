@@ -1,7 +1,7 @@
 from atomixtest import with_cluster, log
 
 @with_cluster(nodes=3)
-def test_test(cluster):
+def _test_test(cluster):
     """Test test"""
     client1 = cluster.add_node(type='client')
     log.message("Attempting to isolate node 1")
