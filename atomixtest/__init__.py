@@ -1,7 +1,7 @@
 from cluster import Cluster, Node
 from logger import log
 
-def with_cluster(name=None, nodes=3, clients=0, supernet='172.18.0.0/16', subnet=None, gateway=None):
+def with_cluster(name=None, nodes=3, clients=0, **kwargs):
     """Decorator for passing a cluster into a function."""
     def get_name(f):
         if name is None:
@@ -11,10 +11,10 @@ def with_cluster(name=None, nodes=3, clients=0, supernet='172.18.0.0/16', subnet
         return name
 
     def wrap(f):
-        cluster = Cluster(get_name(f))
+        cluster = Cluster(get_name())
         def new_func():
             try:
-                cluster.setup(nodes, supernet, subnet, gateway)
+                cluster.setup(nodes, **kwargs)
                 for _ in range(clients):
                     cluster.add_node(Node.Type.CLIENT)
                 f(cluster)
