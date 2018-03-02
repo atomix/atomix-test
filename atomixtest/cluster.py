@@ -9,6 +9,7 @@ import os
 import docker
 import socket
 import time
+import uuid
 from docker.api.client import APIClient
 from docker.utils import kwargs_from_env
 
@@ -113,7 +114,7 @@ class Cluster(object):
         """Adds a new node to the cluster."""
         self.log.message("Adding a node to the cluster")
         node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
-        node.setup(self.cpus, self.memory, self.profiling)
+        node.setup(cpus=self.cpus, memory=self.memory, profiling=self.profiling)
         node.wait_for_start()
         return node
 
@@ -131,6 +132,23 @@ class Cluster(object):
         """Waits for a cluster to finish shutdown."""
         for node in self.nodes():
             node.wait_for_stop()
+
+    def shutdown(self):
+        """Shuts down the cluster."""
+        for node in self.nodes():
+            node.stop()
+
+    def startup(self):
+        """Starts up the cluster."""
+        for node in self.nodes():
+            node.start()
+        for node in self.nodes():
+            node.wait_for_start()
+
+    def restart(self):
+        """Restarts the cluster."""
+        self.shutdown()
+        self.startup()
 
     def teardown(self):
         """Tears down the cluster."""
@@ -278,7 +296,7 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, core_partitions=7, data_partitions=71, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, core_partitions=7, data_partitions=71, cpus=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
@@ -316,7 +334,7 @@ class Node(object):
             ports=ports,
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
-            cpuset_cpus=cpu,
+            cpuset_cpus=cpus,
             mem_limit=memory,
             environment={
                 'profile': 'true' if profiling else 'false',
@@ -462,7 +480,9 @@ class Node(object):
         self.teardown()
 
 
-def create_cluster(name, **kwargs):
+def create_cluster(name=None, **kwargs):
+    if name is None:
+        name = str(uuid.uuid4())
     return _ConfiguredCluster(name, **kwargs)
 
 
