@@ -242,9 +242,13 @@ class Node(object):
             port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
             return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
 
-    def logs(self):
+    def attach(self):
+        """Watches output on the node."""
+        return self.docker_container.attach(stream=True, logs=False)
+
+    def logs(self, stream=False):
         """Returns the logs for the node."""
-        return self.docker_container.logs()
+        return self.docker_container.logs(stream=stream)
 
     @property
     def docker_container(self):

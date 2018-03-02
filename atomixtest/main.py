@@ -44,8 +44,25 @@ def recover(args):
 def restart(args):
     get_cluster(args.cluster).node(args.node).restart()
 
+def attach(args):
+    try:
+        for line in get_cluster(args.cluster).node(args.node).attach():
+            sys.stdout.write(line)
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        pass
+
 def logs(args):
-    print get_cluster(args.cluster).node(args.node).logs()
+    output = get_cluster(args.cluster).node(args.node).logs(stream=args.stream)
+    if isinstance(output, basestring):
+        print output
+    else:
+        try:
+            for line in output:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+        except KeyboardInterrupt:
+            pass
 
 def partition(args):
     get_cluster(args.cluster).network.partition(args.local, args.remote)
@@ -234,8 +251,13 @@ def _create_parser():
     destress_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to destress")
     destress_parser.set_defaults(func=destress)
 
+    attach_parser = cluster_subparsers.add_parser('attach', help="Attaches to a specific node")
+    attach_parser.add_argument('node', type=name_or_id, help="The node to which to attach")
+    attach_parser.set_defaults(func=attach)
+
     logs_parser = cluster_subparsers.add_parser('logs', help="Get logs for a specific node")
     logs_parser.add_argument('node', type=name_or_id, help="The node for which to retrieve logs")
+    logs_parser.add_argument('-s', '--stream', action='store_true', default=False, help="Whether to stream the logs")
     logs_parser.set_defaults(func=logs)
 
     run_parser = subparsers.add_parser('run', help="Run a test")
