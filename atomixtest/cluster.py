@@ -26,6 +26,22 @@ class Cluster(object):
         """Returns the cluster data path."""
         return os.path.join(os.getcwd(), '.data', self.name)
 
+    @property
+    def cpus(self):
+        return self._docker_api_client.inspect_container(self.node(1).name)['HostConfig']['CpusetCpus']
+
+    @property
+    def memory(self):
+        return self._docker_api_client.inspect_container(self.node(1).name)['HostConfig']['Memory']
+
+    @property
+    def profiling(self):
+        envs = self._docker_api_client.inspect_container(self.node(1).name)['Config']['Env']
+        for env in envs:
+            if env.startswith('profile='):
+                return env[len('profile='):] == 'true'
+        return False
+
     def node(self, id):
         """Returns the node with the given ID."""
         if isinstance(id, int):
@@ -56,7 +72,7 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
+    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
@@ -65,7 +81,7 @@ class Cluster(object):
 
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
-            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory)
+            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory, profiling)
 
         self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
@@ -75,7 +91,7 @@ class Cluster(object):
         """Adds a new node to the cluster."""
         self.log.message("Adding a node to the cluster")
         node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
-        node.setup()
+        node.setup(self.cpus, self.memory, self.profiling)
         node.wait_for_start()
         return node
 
@@ -220,6 +236,12 @@ class Node(object):
         port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
         return port_bindings['{}/tcp'.format(self.http_port)][0]['HostPort']
 
+    @property
+    def profiler_port(self):
+        if self.cluster.profiling:
+            port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
+            return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
+
     def logs(self):
         """Returns the logs for the node."""
         return self.docker_container.logs()
@@ -231,13 +253,17 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, cpu=None, memory=None):
+    def setup(self, cpu=None, memory=None, profiling=False):
         """Sets up the node."""
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
         args.append('--bootstrap')
         for node in self.cluster.nodes():
             args.append('%s:%s:%d' % (node.name, node.ip, node.tcp_port))
+
+        ports = {self.http_port: self._find_open_port()}
+        if profiling:
+            ports[10001] = self._find_open_port()
 
         self.log.message("Running container {}", self.name)
         self._docker_client.containers.run(
@@ -246,11 +272,12 @@ class Node(object):
             name=self.name,
             labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-type': self.type},
             network=self.cluster.network.name,
-            ports={self.http_port: self._find_open_port()},
+            ports=ports,
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
             cpuset_cpus=cpu,
-            mem_limit=memory)
+            mem_limit=memory,
+            environment={'profile': 'true' if profiling else 'false'})
         self.client = AtomixClient(port=self.local_port)
         return self
 

@@ -12,16 +12,26 @@ def _create_table(data):
 
 def clusters_to_str(clusters):
     """Returns a string table for the given clusters."""
-    data = [['NAME', 'NODES', 'NETWORK', 'SUBNET', 'GATEWAY'],]
+    data = [['NAME', 'NODES', 'NETWORK', 'SUBNET', 'GATEWAY', 'CPUS', 'MEMORY', 'PROFILING'],]
     for cluster in clusters:
-        data.append([cluster.name, len(cluster.nodes()), cluster.network.name, cluster.network.subnet, cluster.network.gateway])
+        data.append([
+            cluster.name,
+            len(cluster.nodes()),
+            cluster.network.name,
+            cluster.network.subnet,
+            cluster.network.gateway,
+            cluster.cpus,
+            cluster.memory,
+            'enabled' if cluster.profiling else 'disabled'
+        ])
     return _create_table(data)
 
 def cluster_to_str(cluster):
     """Returns a string table for the given cluster."""
-    data = [['ID', 'NAME', 'STATUS', 'IP', 'LOCAL PORT'],]
+    data = [['ID', 'NAME', 'STATUS', 'IP', 'LOCAL PORT', 'PROFILER PORT'],]
     for node in cluster.nodes():
-        data.append([node.id, node.name, node.status, node.ip, node.local_port])
+        profiler_port = node.profiler_port
+        data.append([node.id, node.name, node.status, node.ip, node.local_port, profiler_port if profiler_port is not None else ''])
     return _create_table(data)
 
 class Context(object):
