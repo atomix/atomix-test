@@ -72,7 +72,7 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, nodes=3, core_partitions=7, data_partitions=71, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
@@ -81,7 +81,16 @@ class Cluster(object):
 
         # Iterate through nodes and setup containers.
         for n in range(1, nodes + 1):
-            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(cpu, memory, profiling, log_level, console_log_level, file_log_level)
+            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(
+                core_partitions,
+                data_partitions,
+                cpu,
+                memory,
+                profiling,
+                log_level,
+                console_log_level,
+                file_log_level
+            )
 
         self.log.message("Waiting for cluster bootstrap")
         self.wait_for_start()
@@ -257,13 +266,17 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, core_partitions=7, data_partitions=71, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
         args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
         args.append('--bootstrap')
         for node in self.cluster.nodes():
             args.append('%s:%s:%d' % (node.name, node.ip, node.tcp_port))
+        args.append('--core-partitions')
+        args.append(core_partitions)
+        args.append('--data-partitions')
+        args.append(data_partitions)
 
         ports = {self.http_port: self._find_open_port()}
         if profiling:
@@ -283,7 +296,7 @@ class Node(object):
         self.log.message("Running container {}", self.name)
         self._docker_client.containers.run(
             'atomix',
-            ' '.join(args),
+            ' '.join([str(arg) for arg in args]),
             name=self.name,
             labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-type': self.type},
             network=self.cluster.network.name,

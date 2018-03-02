@@ -13,7 +13,9 @@ def setup(args):
         profiling=args.profiling,
         log_level=args.log_level,
         console_log_level=args.console_level,
-        file_log_level=args.file_level
+        file_log_level=args.file_level,
+        core_partitions=args.core_partitions,
+        data_partitions=args.data_partitions
     )
 
 def teardown(args):
@@ -154,6 +156,8 @@ def _create_parser():
     setup_parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
     setup_parser.add_argument('-o', '--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
     setup_parser.add_argument('-f', '--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
+    setup_parser.add_argument('-cp', '--core-partitions', type=int, default=7, help="The number of core partitions")
+    setup_parser.add_argument('-dp', '--data-partitions', type=int, default=71, help="The number of data partitions")
     setup_parser.set_defaults(func=setup)
 
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")
