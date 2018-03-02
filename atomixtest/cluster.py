@@ -72,7 +72,20 @@ class Cluster(object):
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(self, nodes=3, core_partitions=7, data_partitions=71, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(
+            self,
+            nodes=3,
+            core_partitions=7,
+            data_partitions=71,
+            supernet='172.18.0.0/16',
+            subnet=None,
+            gateway=None,
+            cpu=None,
+            memory=None,
+            profiling=False,
+            log_level='trace',
+            console_log_level='info',
+            file_log_level='info'):
         """Sets up the cluster."""
         self.log.message("Setting up cluster")
 
@@ -156,6 +169,9 @@ class Cluster(object):
             for node in self.nodes():
                 node.destress()
 
+    def __enter__(self):
+        return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.teardown()
 
@@ -177,20 +193,16 @@ class Cluster(object):
 
 
 class _ConfiguredCluster(Cluster):
-    def __init__(self, name, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
+    def __init__(self, name, **kwargs):
         super(_ConfiguredCluster, self).__init__(name)
-        self._nodes = nodes
-        self._supernet = supernet
-        self._subnet = subnet
-        self._gateway = gateway
-        self._cpu = cpu
-        self._memory = memory
+        self._kwargs = kwargs
 
     def setup(self):
-        super(_ConfiguredCluster, self).setup(self._nodes, self._supernet, self._subnet, self._gateway, self._cpu, self._memory)
+        super(_ConfiguredCluster, self).setup(**self._kwargs)
 
     def __enter__(self):
         self.setup()
+        return self
 
 
 class Node(object):
@@ -450,8 +462,8 @@ class Node(object):
         self.teardown()
 
 
-def create_cluster(name, nodes=3, supernet='172.18.0.0/16', subnet=None, gateway=None, cpu=None, memory=None):
-    return _ConfiguredCluster(name, nodes, supernet, subnet, gateway, cpu, memory)
+def create_cluster(name, **kwargs):
+    return _ConfiguredCluster(name, **kwargs)
 
 
 def _find_cluster():
