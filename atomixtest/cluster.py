@@ -38,10 +38,7 @@ class Cluster(object):
     @property
     def profiling(self):
         envs = self._docker_api_client.inspect_container(self.node(1).name)['Config']['Env']
-        for env in envs:
-            if env.startswith('profile='):
-                return env[len('profile='):] == 'true'
-        return False
+        return _find_env(envs, 'profile') == 'true'
 
     def node(self, id):
         """Returns the node with the given ID."""
@@ -113,8 +110,22 @@ class Cluster(object):
     def add_node(self, type='server'):
         """Adds a new node to the cluster."""
         self.log.message("Adding a node to the cluster")
+
+        # Look up the number of configured core/data partitions on the first server node.
+        first_node = self.servers()[0]
+        core_partitions, data_partitions = first_node.core_partitions, first_node.data_partitions
+
+        # Create a new node instance and setup the node.
         node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
-        node.setup(cpus=self.cpus, memory=self.memory, profiling=self.profiling)
+        node.setup(
+            cpus=self.cpus,
+            memory=self.memory,
+            profiling=self.profiling,
+            core_partitions=core_partitions,
+            data_partitions=data_partitions
+        )
+
+        # Wait for the node to finish startup before returning.
         node.wait_for_start()
         return node
 
@@ -281,6 +292,18 @@ class Node(object):
             port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
             return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
 
+    @property
+    def core_partitions(self):
+        envs = self._docker_api_client.inspect_container(self.docker_container.name)['Config']['Env']
+        core_partitions = _find_env(envs, 'core_partitions')
+        return int(core_partitions) if core_partitions is not None else 7
+
+    @property
+    def data_partitions(self):
+        envs = self._docker_api_client.inspect_container(self.docker_container.name)['Config']['Env']
+        data_partitions = _find_env(envs, 'data_partitions')
+        return int(data_partitions) if data_partitions is not None else 71
+
     def attach(self):
         """Watches output on the node."""
         return self.docker_container.attach(stream=True, logs=False)
@@ -340,7 +363,9 @@ class Node(object):
                 'profile': 'true' if profiling else 'false',
                 'log_level': log_level.upper(),
                 'console_log_level': console_log_level.upper(),
-                'file_log_level': file_log_level.upper()
+                'file_log_level': file_log_level.upper(),
+                'core_partitions': core_partitions,
+                'data_partitions': data_partitions
             })
         self.client = AtomixClient(port=self.local_port)
         return self
@@ -514,3 +539,11 @@ def get_clusters():
         cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
         clusters.add(cluster_name)
     return [Cluster(name) for name in clusters]
+
+
+def _find_env(envs, name):
+    prefix = name + '='
+    for env in envs:
+        if env.startswith(prefix):
+            return env[len(prefix):]
+    return False

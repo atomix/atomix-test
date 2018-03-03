@@ -6,17 +6,17 @@ def _test_value(node):
     value.set("Hello world!")
     assert value.get() == "Hello world!"
 
-@with_cluster(nodes=3)
+@with_cluster(nodes=3, core_partitions=3, data_partitions=3)
 def test_cluster_add_server_node(cluster):
     node = cluster.add_node(type='server')
     _test_value(node)
 
-@with_cluster(nodes=3)
+@with_cluster(nodes=3, core_partitions=3, data_partitions=3)
 def test_cluster_add_client_node(cluster):
     node = cluster.add_node(type='client')
     _test_value(node)
 
-@with_cluster(nodes=3)
+@with_cluster(nodes=3, core_partitions=3, data_partitions=3)
 def test_cluster_restart(cluster):
     with cluster.add_node(type='client') as node:
         _test_value(node)
