@@ -47,9 +47,9 @@ class Cluster(object):
         else:
             return [node for node in self.nodes() if node.name == id].pop()
 
-    def nodes(self, type=None):
+    def nodes(self, *types):
         """Returns a list of nodes in the cluster."""
-        return [node for node in self._nodes if type is None or node.type == type]
+        return [node for node in self._nodes if len(types) == 0 or node.type in types]
 
     def _load_nodes(self):
         """Returns a list of nodes in the cluster."""
@@ -77,6 +77,7 @@ class Cluster(object):
     def setup(
             self,
             nodes=3,
+            type='core',
             core_partitions=7,
             data_partitions=71,
             supernet='172.18.0.0/16',
@@ -97,7 +98,7 @@ class Cluster(object):
         # Iterate through nodes and setup containers.
         setup_nodes = []
         for n in range(1, nodes + 1):
-            node = Node(self._node_name(n), next(self.network.hosts), Node.Type.CORE, self)
+            node = Node(self._node_name(n), next(self.network.hosts), type, self)
             self._nodes.append(node)
             setup_nodes.append(node)
 
@@ -338,14 +339,38 @@ class Node(object):
         args.append('--type')
         args.append(self.type)
 
-        args.append('--config')
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config/test.yaml')
-        with open(path, 'r') as f:
-            args.append(f.read())
+        config = ""
+        config += "cluster:"
+        config += "  name: {}".format(self.cluster.name)
+        config += "partition-groups:"
 
-        args.append('--core-nodes')
-        for node in self.cluster.nodes(Node.Type.CORE):
-            args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
+        core_nodes = self.cluster.nodes(Node.Type.CORE)
+        if len(core_nodes) > 0:
+            args.append('--core-nodes')
+            for node in core_nodes:
+                args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
+            config += "  - type: raft"
+            config += "    name: core"
+            config += "    partitions: {}".format(core_partitions)
+        else:
+            data_nodes = self.cluster.nodes(Node.Type.DATA)
+            if len(data_nodes) > 0:
+                args.append('--bootstrap-nodes')
+                for node in data_nodes:
+                    args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
+            else:
+                client_nodes = self.cluster.nodes(Node.Type.CLIENT)
+                if len(client_nodes) > 0:
+                    args.append('--bootstrap-nodes')
+                    for node in client_nodes:
+                        args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
+
+        config += "  - type: multi-primary"
+        config += "    name: data"
+        config += "    partitions: {}".format(data_partitions)
+
+        args.append('--config')
+        args.append(config)
 
         ports = {self.http_port: self._find_open_port()}
         if profiling:
