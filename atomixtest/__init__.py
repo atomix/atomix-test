@@ -1,5 +1,4 @@
 from cluster import Cluster, Node, create_cluster
-from logger import log
 from datetime import datetime
 
 def with_cluster(name=None, nodes=3, clients=0, **kwargs):

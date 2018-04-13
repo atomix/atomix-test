@@ -1,7 +1,7 @@
-from logger import Logger
 from errors import UnknownNetworkError
 from utils import with_context
 from ipaddress import IPv4Network, IPv4Interface
+from utils import logger
 import random
 import docker
 from docker.api.client import APIClient
@@ -11,7 +11,7 @@ from six.moves import shlex_quote
 class Network(object):
     """Atomix test network."""
     def __init__(self, name):
-        self.log = Logger(name, Logger.Type.FRAMEWORK)
+        self.log = logger(name)
         self.name = name
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
@@ -73,12 +73,12 @@ class Network(object):
         ipam_config = docker.types.IPAMConfig(
             pool_configs=[ipam_pool]
         )
-        self.log.message("Creating network")
+        self.log.info("Creating network")
         self._docker_client.networks.create(self.name, driver='bridge', ipam=ipam_config)
 
     def teardown(self):
         """Tears down the network."""
-        self.log.message("Removing network")
+        self.log.info("Removing network")
         self.docker_network.remove()
 
     def partition(self, local, remote=None):
@@ -216,53 +216,53 @@ class Network(object):
 
     def _partition(self, local, remote):
         """Partitions the given local from the given remote."""
-        self.log.message("Cutting off link {}->{}", local, remote)
+        self.log.info("Cutting off link %s->%s", local, remote)
         self._run_in_container(local, 'iptables', '-A', 'INPUT', '-s', self._get_ip(remote), '-j', 'DROP', '-w')
         return with_context(lambda: self.heal(local, remote))
 
     def _heal(self, local, remote):
         """Heals a partition from the given local to the given remote."""
-        self.log.message("Restoring link {}->{}", local, remote)
+        self.log.info("Restoring link %s->%s", local, remote)
         self._run_in_container(local, 'iptables', '-D', 'INPUT', '-s', self._get_ip(remote), '-j', 'DROP', '-w')
 
     def _delay(self, node, latency=50, jitter=10, correlation=.75, distribution='normal'):
         """Delays packets to the given node."""
         latency, jitter, correlation = self._millize(latency), self._millize(jitter), self._percentize(correlation)
-        self.log.message("Delaying packets to {} (latency={}, jitter={}, correlation={}, distribution={})", node, latency, jitter, correlation, distribution)
+        self.log.info("Delaying packets to %s (latency=%s, jitter=%s, correlation=%s, distribution=%s)", node, latency, jitter, correlation, distribution)
         self._run_in_container(node, 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'delay', latency, jitter, correlation, 'distribution', distribution)
         return with_context(lambda: self.restore(node))
 
     def _drop(self, node, probability=.02, correlation=.25):
         """Drops packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
-        self.log.message("Dropping packets to {} (probability={}, correlation={})", node, probability, correlation)
+        self.log.info("Dropping packets to %s (probability=%s, correlation=%s)", node, probability, correlation)
         self._run_in_container(node, 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'loss', probability, correlation)
         return with_context(lambda: self.restore(node))
 
     def _reorder(self, node, probability=.02, correlation=.5):
         """Reorders packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
-        self.log.message("Reordering packets to {} (probability={}, correlation={})", node, probability, correlation)
+        self.log.info("Reordering packets to %s (probability=%s, correlation=%s)", node, probability, correlation)
         self._run_in_container(node, 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'reorder', probability, correlation)
         return with_context(lambda: self.restore(node))
 
     def _duplicate(self, node, probability=.005, correlation=.05):
         """Duplicates packets to the given node."""
         probability, correlation = self._percentize(probability), self._percentize(correlation)
-        self.log.message("Duplicating packets to {} (probability={}, correlation={})", node, probability, correlation)
+        self.log.info("Duplicating packets to %s (probability=%s, correlation=%s)", node, probability, correlation)
         self._run_in_container(node, 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'duplicate', probability, correlation)
         return with_context(lambda: self.restore(node))
 
     def _corrupt(self, node, probability=.02):
         """Duplicates packets to the given node."""
         probability = self._percentize(probability)
-        self.log.message("Corrupting packets to {} (probability={})", node, probability)
+        self.log.info("Corrupting packets to %s (probability=%s)", node, probability)
         self._run_in_container(node, 'tc', 'qdisc', 'add', 'dev', 'eth0', 'root', 'netem', 'corrupt', probability)
         return with_context(lambda: self.restore(node))
 
     def _restore(self, node):
         """Restores packets to the given node to normal order."""
-        self.log.message("Restoring packets to {}", node)
+        self.log.info("Restoring packets to %s", node)
         self._run_in_container(node, 'tc', 'qdisc', 'del', 'dev', 'eth0', 'root')
 
     def _run_in_container(self, node, *command):

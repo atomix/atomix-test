@@ -1,4 +1,10 @@
 from terminaltables import AsciiTable
+import logging
+
+logging.basicConfig(format='%(asctime)-15s [%(name)s] %(levelname)s %(message)s', level=logging.INFO)
+
+def logger(name):
+    return logging.getLogger(name)
 
 def _create_table(data):
     """Creates a table from the given data."""

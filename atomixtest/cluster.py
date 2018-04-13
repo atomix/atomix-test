@@ -1,8 +1,7 @@
 from network import Network
 from atomix import AtomixClient
-from logger import Logger
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
-from utils import with_context
+from utils import logger, with_context
 from six.moves import shlex_quote
 import shutil
 import os
@@ -16,7 +15,7 @@ from docker.utils import kwargs_from_env
 class Cluster(object):
     """Atomix test cluster."""
     def __init__(self, name):
-        self.log = Logger(name, Logger.Type.FRAMEWORK)
+        self.log = logger(name)
         self.name = name
         self.network = Network(name)
         self._docker_client = docker.from_env()
@@ -90,7 +89,7 @@ class Cluster(object):
             console_log_level='info',
             file_log_level='info'):
         """Sets up the cluster."""
-        self.log.message("Setting up cluster")
+        self.log.info("Setting up cluster")
 
         # Set up the test network.
         self.network.setup(supernet, subnet, gateway)
@@ -114,13 +113,13 @@ class Cluster(object):
                 file_log_level
             )
 
-        self.log.message("Waiting for cluster bootstrap")
+        self.log.info("Waiting for cluster bootstrap")
         self.wait_for_start()
         return self
 
     def add_node(self, type='data'):
         """Adds a new node to the cluster."""
-        self.log.message("Adding a node to the cluster")
+        self.log.info("Adding a node to the cluster")
 
         # Look up the number of configured core/data partitions on the first core node.
         first_node = self.core_nodes()[0]
@@ -142,7 +141,7 @@ class Cluster(object):
 
     def remove_node(self, id):
         """Removes a node from the cluster."""
-        self.log.message("Removing a node from the cluster")
+        self.log.info("Removing a node from the cluster")
         self.node(id).teardown()
 
     def wait_for_start(self):
@@ -174,7 +173,7 @@ class Cluster(object):
 
     def teardown(self):
         """Tears down the cluster."""
-        self.log.message("Tearing down cluster")
+        self.log.info("Tearing down cluster")
         for node in self.nodes():
             try:
                 node.teardown()
@@ -187,7 +186,7 @@ class Cluster(object):
 
     def cleanup(self):
         """Cleans up the cluster data."""
-        self.log.message("Cleaning up cluster state")
+        self.log.info("Cleaning up cluster state")
         if os.path.exists(self.path):
             shutil.rmtree(self.path)
 
@@ -253,7 +252,7 @@ class Node(object):
         CLIENT = 'client'
 
     def __init__(self, name, ip, type, cluster):
-        self.log = Logger(cluster.name, Logger.Type.FRAMEWORK)
+        self.log = logger(cluster.name)
         self.name = name
         self.ip = ip
         self.type = type
@@ -363,8 +362,7 @@ class Node(object):
         if find_index(file_log_level) < find_index(log_level):
             log_level = file_log_level
 
-        self.log.message("Running container {}", self.name)
-        print(' '.join([shlex_quote(str(arg)) for arg in args]))
+        self.log.info("Running container %s", self.name)
         self._docker_client.containers.run(
             'atomix',
             ' '.join([shlex_quote(str(arg)) for arg in args]),
@@ -395,7 +393,7 @@ class Node(object):
             command = ' '.join([shlex_quote(str(arg)) for arg in command])
         else:
             command = command[0]
-        self.log.message("Executing command '{}' on {}", command, self.name)
+        self.log.info("Executing command '%s' on %s", command, self.name)
         return self.docker_container.exec_run(command)
 
     def execute(self, *command):
@@ -404,34 +402,34 @@ class Node(object):
             command = ' '.join([shlex_quote(str(arg)) for arg in command])
         else:
             command = command[0]
-        self.log.message("Executing command '{}' on {}", command, self.name)
+        self.log.info("Executing command '%s' on %s", command, self.name)
         return self.docker_container.exec_run(command, detach=True)
 
     def stop(self):
         """Stops the node."""
-        self.log.message("Stopping node {}", self.name)
+        self.log.info("Stopping node %s", self.name)
         self.docker_container.stop()
 
     def start(self):
         """Starts the node."""
-        self.log.message("Starting node {}", self.name)
+        self.log.info("Starting node %s", self.name)
         self.docker_container.start()
         self.wait_for_start()
 
     def kill(self):
         """Kills the node."""
-        self.log.message("Killing node {}", self.name)
+        self.log.info("Killing node %s", self.name)
         self.docker_container.kill()
 
     def recover(self):
         """Recovers a killed node."""
-        self.log.message("Recovering node {}", self.name)
+        self.log.info("Recovering node %s", self.name)
         self.docker_container.start()
         self.wait_for_start()
 
     def restart(self):
         """Restarts the node."""
-        self.log.message("Restarting node {}", self.name)
+        self.log.info("Restarting node %s", self.name)
         self.docker_container.restart()
         self.wait_for_start()
 
@@ -503,9 +501,9 @@ class Node(object):
     def teardown(self):
         """Tears down the node."""
         container = self.docker_container
-        self.log.message("Stopping container {}", self.name)
+        self.log.info("Stopping container %s", self.name)
         container.stop()
-        self.log.message("Removing container {}", self.name)
+        self.log.info("Removing container %s", self.name)
         container.remove()
 
     def wait_for_start(self, timeout=60):
