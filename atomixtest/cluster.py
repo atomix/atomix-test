@@ -21,6 +21,7 @@ class Cluster(object):
         self.network = Network(name)
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
+        self._nodes = self._load_nodes()
 
     @property
     def path(self):
@@ -49,11 +50,12 @@ class Cluster(object):
 
     def nodes(self, type=None):
         """Returns a list of nodes in the cluster."""
+        return [node for node in self._nodes if type is None or node.type == type]
+
+    def _load_nodes(self):
+        """Returns a list of nodes in the cluster."""
         # Sort the containers by name and then extract the IP address from the container info.
-        if type is not None:
-            labels = ['atomix-test=true', 'atomix-cluster={}'.format(self.name), 'atomix-type={}'.format(type)]
-        else:
-            labels = ['atomix-test=true', 'atomix-cluster={}'.format(self.name),]
+        labels = ['atomix-test=true', 'atomix-cluster={}'.format(self.name),]
         containers = sorted(self._docker_client.containers.list(all=True, filters={'label': labels}), key=lambda c: c.name)
         nodes = []
         for container in containers:
@@ -61,10 +63,13 @@ class Cluster(object):
             nodes.append(Node(container.name, container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'], container_info['Config']['Labels']['atomix-type'], self))
         return nodes
 
-    def servers(self):
-        return self.nodes(Node.Type.SERVER)
+    def core_nodes(self):
+        return self.nodes(Node.Type.CORE)
 
-    def clients(self):
+    def data_nodes(self):
+        return self.nodes(Node.Type.DATA)
+
+    def client_nodes(self):
         return self.nodes(Node.Type.CLIENT)
 
     def _node_name(self, id):
@@ -91,8 +96,14 @@ class Cluster(object):
         self.network.setup(supernet, subnet, gateway)
 
         # Iterate through nodes and setup containers.
+        setup_nodes = []
         for n in range(1, nodes + 1):
-            Node(self._node_name(n), next(self.network.hosts), Node.Type.SERVER, self).setup(
+            node = Node(self._node_name(n), next(self.network.hosts), Node.Type.CORE, self)
+            self._nodes.append(node)
+            setup_nodes.append(node)
+
+        for node in setup_nodes:
+            node.setup(
                 core_partitions,
                 data_partitions,
                 cpu,
@@ -107,12 +118,12 @@ class Cluster(object):
         self.wait_for_start()
         return self
 
-    def add_node(self, type='server'):
+    def add_node(self, type='data'):
         """Adds a new node to the cluster."""
         self.log.message("Adding a node to the cluster")
 
-        # Look up the number of configured core/data partitions on the first server node.
-        first_node = self.servers()[0]
+        # Look up the number of configured core/data partitions on the first core node.
+        first_node = self.core_nodes()[0]
         core_partitions, data_partitions = first_node.core_partitions, first_node.data_partitions
 
         # Create a new node instance and setup the node.
@@ -237,7 +248,8 @@ class _ConfiguredCluster(Cluster):
 class Node(object):
     """Atomix test node."""
     class Type(object):
-        SERVER = 'server'
+        CORE = 'core'
+        DATA = 'data'
         CLIENT = 'client'
 
     def __init__(self, name, ip, type, cluster):
@@ -322,14 +334,19 @@ class Node(object):
     def setup(self, core_partitions=7, data_partitions=71, cpus=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
-        args.append('%s:%s:%d' % (self.name, self.ip, self.tcp_port))
-        args.append('--bootstrap')
-        for node in self.cluster.nodes():
-            args.append('%s:%s:%d' % (node.name, node.ip, node.tcp_port))
-        args.append('--core-partitions')
-        args.append(core_partitions)
-        args.append('--data-partitions')
-        args.append(data_partitions)
+        args.append('%s@%s:%d' % (self.name, self.ip, self.tcp_port))
+
+        args.append('--type')
+        args.append(self.type)
+
+        args.append('--config')
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config/test.yaml')
+        with open(path, 'r') as f:
+            args.append(f.read())
+
+        args.append('--core-nodes')
+        for node in self.cluster.nodes(Node.Type.CORE):
+            args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
 
         ports = {self.http_port: self._find_open_port()}
         if profiling:
@@ -347,9 +364,10 @@ class Node(object):
             log_level = file_log_level
 
         self.log.message("Running container {}", self.name)
+        print(' '.join([shlex_quote(str(arg)) for arg in args]))
         self._docker_client.containers.run(
             'atomix',
-            ' '.join([str(arg) for arg in args]),
+            ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
             labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-type': self.type},
             cap_add=['NET_ADMIN'],
@@ -364,6 +382,7 @@ class Node(object):
                 'log_level': log_level.upper(),
                 'console_log_level': console_log_level.upper(),
                 'file_log_level': file_log_level.upper(),
+                'cluster_name': self.cluster.name,
                 'core_partitions': core_partitions,
                 'data_partitions': data_partitions
             })

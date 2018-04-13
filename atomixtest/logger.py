@@ -6,7 +6,7 @@ class Logger(object):
     """Logger object."""
     class Type(object):
         """Logger type."""
-        FRAMEWORK = ((Back.MAGENTA, Fore.WHITE), (Back.RESET, Fore.CYAN))
+        FRAMEWORK = ((Back.RESET, Fore.WHITE), (Back.RESET, Fore.CYAN))
         CLIENT = ((Back.CYAN, Fore.WHITE), (Back.RESET, Fore.MAGENTA))
         TEST = ((Back.GREEN, Fore.WHITE), (Back.RESET, Fore.GREEN))
         ERROR = ((Back.RED, Fore.WHITE), (Style.RESET_ALL,))

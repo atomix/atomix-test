@@ -167,7 +167,7 @@ def _create_parser():
     teardown_parser.set_defaults(func=teardown)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
-    add_node_parser.add_argument('-t', '--type', choices=['server', 'client'], default='server', help="The type of node to add")
+    add_node_parser.add_argument('-t', '--type', choices=['core', 'data', 'client'], default='data', help="The type of node to add")
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")
