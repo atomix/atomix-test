@@ -83,6 +83,7 @@ class Cluster(object):
             supernet='172.18.0.0/16',
             subnet=None,
             gateway=None,
+            discover=False,
             cpu=None,
             memory=None,
             profiling=False,
@@ -106,6 +107,7 @@ class Cluster(object):
             node.setup(
                 core_partitions,
                 data_partitions,
+                discover,
                 cpu,
                 memory,
                 profiling,
@@ -331,7 +333,7 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, core_partitions=7, data_partitions=71, cpus=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, core_partitions=7, data_partitions=71, discover=False, cpus=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
         args.append('%s@%s:%d' % (self.name, self.ip, self.tcp_port))
@@ -340,18 +342,20 @@ class Node(object):
         args.append(self.type)
 
         config = ""
-        config += "cluster:"
-        config += "  name: {}".format(self.cluster.name)
-        config += "partition-groups:"
+        config += "cluster:\n"
+        config += "  name: {}\n".format(self.cluster.name)
+        config += "partition-groups:\n"
 
         core_nodes = self.cluster.nodes(Node.Type.CORE)
         if len(core_nodes) > 0:
             args.append('--core-nodes')
             for node in core_nodes:
                 args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
-            config += "  - type: raft"
-            config += "    name: core"
-            config += "    partitions: {}".format(core_partitions)
+            config += "  - type: raft\n"
+            config += "    name: core\n"
+            config += "    partitions: {}\n".format(core_partitions)
+        elif discover:
+            args.append('--multicast')
         else:
             data_nodes = self.cluster.nodes(Node.Type.DATA)
             if len(data_nodes) > 0:
@@ -365,8 +369,8 @@ class Node(object):
                     for node in client_nodes:
                         args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
 
-        config += "  - type: multi-primary"
-        config += "    name: data"
+        config += "  - type: multi-primary\n"
+        config += "    name: data\n"
         config += "    partitions: {}".format(data_partitions)
 
         args.append('--config')

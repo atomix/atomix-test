@@ -9,6 +9,7 @@ def setup(args):
         type=args.type,
         subnet=args.subnet,
         gateway=args.gateway,
+        discover=args.discover,
         cpu=args.cpu,
         memory=args.memory_limit,
         profiling=args.profiling,
@@ -153,6 +154,7 @@ def _create_parser():
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
     setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
     setup_parser.add_argument('-t', '--type', choices=['core', 'data', 'client'], default='core', help="The type of cluster to form")
+    setup_parser.add_argument('-d', '--discover', action='store_true', default=False, help="Whether to enable multicast discovery")
     setup_parser.add_argument('-s', '--subnet', help="The subnet in which to create the cluster")
     setup_parser.add_argument('-g', '--gateway', help="The IPv4 gateway for the master subnet")
     setup_parser.add_argument('-c', '--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
