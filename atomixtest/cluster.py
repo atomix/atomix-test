@@ -3,6 +3,7 @@ from atomix import AtomixClient
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
 from utils import logger, with_context
 from six.moves import shlex_quote
+from datetime import datetime
 import shutil
 import os
 import docker
@@ -516,8 +517,7 @@ class Node(object):
 
 
 def create_cluster(name=None, **kwargs):
-    if name is None:
-        name = str(uuid.uuid4())
+    name = '{}-{}'.format(name, datetime.now().strftime('%Y%m%d%H%M%S'))
     return _ConfiguredCluster(name, **kwargs)
 
 
