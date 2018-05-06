@@ -36,9 +36,9 @@ class Cluster(object):
         return self._docker_api_client.inspect_container(self.node(1).name)['HostConfig']['Memory']
 
     @property
-    def profiling(self):
+    def profiler(self):
         envs = self._docker_api_client.inspect_container(self.node(1).name)['Config']['Env']
-        return _find_env(envs, 'profile') == 'true'
+        return _find_env(envs, 'profiler')
 
     def node(self, id):
         """Returns the node with the given ID."""
@@ -62,31 +62,19 @@ class Cluster(object):
             nodes.append(Node(container.name, container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'], container_info['Config']['Labels']['atomix-type'], self))
         return nodes
 
-    def core_nodes(self):
-        return self.nodes(Node.Type.CORE)
-
-    def data_nodes(self):
-        return self.nodes(Node.Type.DATA)
-
-    def client_nodes(self):
-        return self.nodes(Node.Type.CLIENT)
-
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
     def setup(
             self,
             nodes=3,
-            type='core',
-            core_partitions=7,
-            data_partitions=71,
+            profiles=None,
             supernet='172.18.0.0/16',
             subnet=None,
             gateway=None,
-            discover=False,
-            cpu=None,
+            cpus=None,
             memory=None,
-            profiling=False,
+            profiler=False,
             log_level='trace',
             console_log_level='info',
             file_log_level='info'):
@@ -99,43 +87,37 @@ class Cluster(object):
         # Iterate through nodes and setup containers.
         setup_nodes = []
         for n in range(1, nodes + 1):
-            node = Node(self._node_name(n), next(self.network.hosts), type, self)
+            node = Node(self._node_name(n), next(self.network.hosts), Node.Type.PERSISTENT, self)
             self._nodes.append(node)
             setup_nodes.append(node)
 
         for node in setup_nodes:
             node.setup(
-                core_partitions,
-                data_partitions,
-                discover,
-                cpu,
-                memory,
-                profiling,
-                log_level,
-                console_log_level,
-                file_log_level
+                profiles=profiles,
+                cpus=cpus,
+                memory=memory,
+                profiler=profiler,
+                log_level=log_level,
+                console_log_level=console_log_level,
+                file_log_level=file_log_level
             )
 
         self.log.info("Waiting for cluster bootstrap")
         self.wait_for_start()
         return self
 
-    def add_node(self, type='data'):
+    def add_node(self, type='ephemeral', config=None, profiles=None):
         """Adds a new node to the cluster."""
         self.log.info("Adding a node to the cluster")
-
-        # Look up the number of configured core/data partitions on the first core node.
-        first_node = self.core_nodes()[0]
-        core_partitions, data_partitions = first_node.core_partitions, first_node.data_partitions
 
         # Create a new node instance and setup the node.
         node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
         node.setup(
+            config=config,
+            profiles=profiles,
             cpus=self.cpus,
             memory=self.memory,
-            profiling=self.profiling,
-            core_partitions=core_partitions,
-            data_partitions=data_partitions
+            profiler=self.profiler
         )
 
         # Wait for the node to finish startup before returning.
@@ -250,9 +232,8 @@ class _ConfiguredCluster(Cluster):
 class Node(object):
     """Atomix test node."""
     class Type(object):
-        CORE = 'core'
-        DATA = 'data'
-        CLIENT = 'client'
+        PERSISTENT = 'persistent'
+        EPHEMERAL = 'ephemeral'
 
     def __init__(self, name, ip, type, cluster):
         self.log = logger(cluster.name)
@@ -302,21 +283,15 @@ class Node(object):
 
     @property
     def profiler_port(self):
-        if self.cluster.profiling:
+        if self.cluster.profiler:
             port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
             return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
 
     @property
-    def core_partitions(self):
+    def profiles(self):
         envs = self._docker_api_client.inspect_container(self.docker_container.name)['Config']['Env']
-        core_partitions = _find_env(envs, 'core_partitions')
-        return int(core_partitions) if core_partitions is not None else 7
-
-    @property
-    def data_partitions(self):
-        envs = self._docker_api_client.inspect_container(self.docker_container.name)['Config']['Env']
-        data_partitions = _find_env(envs, 'data_partitions')
-        return int(data_partitions) if data_partitions is not None else 71
+        profiles = _find_env(envs, 'profiles')
+        return tuple(profiles.split(',')) if profiles is not None else ('client',)
 
     def attach(self):
         """Watches output on the node."""
@@ -333,51 +308,37 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, core_partitions=7, data_partitions=71, discover=False, cpus=None, memory=None, profiling=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, config=None, profiles=None, cpus=None, memory=None, profiler=False, log_level='trace', console_log_level='info', file_log_level='info'):
         """Sets up the node."""
         args = []
         args.append('%s@%s:%d' % (self.name, self.ip, self.tcp_port))
 
-        args.append('--type')
-        args.append(self.type)
+        if config is not None:
+            args.append('--config')
+            args.append(config)
+        elif profiles is not None:
+            config = ""
+            config += "cluster:\n"
+            config += "  name: {}\n".format(self.cluster.name)
 
-        config = ""
-        config += "cluster:\n"
-        config += "  name: {}\n".format(self.cluster.name)
-        config += "partition-groups:\n"
+            config += "  members:\n"
+            nodes = self.cluster.nodes()
+            for node in nodes:
+                config += "    {}:\n".format(node.name)
+                config += "      type: {}\n".format(node.type)
+                config += "      address: {}:{}\n".format(node.ip, node.tcp_port)
 
-        core_nodes = self.cluster.nodes(Node.Type.CORE)
-        if len(core_nodes) > 0:
-            args.append('--core-nodes')
-            for node in core_nodes:
-                args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
-            config += "  - type: raft\n"
-            config += "    name: core\n"
-            config += "    partitions: {}\n".format(core_partitions)
-        elif discover:
-            args.append('--multicast')
+            config += "profiles:\n"
+            for profile in profiles:
+                config += "  - {}\n".format(profile)
+
+            args.append('--config')
+            args.append(config)
         else:
-            data_nodes = self.cluster.nodes(Node.Type.DATA)
-            if len(data_nodes) > 0:
-                args.append('--bootstrap-nodes')
-                for node in data_nodes:
-                    args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
-            else:
-                client_nodes = self.cluster.nodes(Node.Type.CLIENT)
-                if len(client_nodes) > 0:
-                    args.append('--bootstrap-nodes')
-                    for node in client_nodes:
-                        args.append('%s@%s:%d' % (node.name, node.ip, node.tcp_port))
-
-        config += "  - type: multi-primary\n"
-        config += "    name: data\n"
-        config += "    partitions: {}".format(data_partitions)
-
-        args.append('--config')
-        args.append(config)
+            raise UnknownNodeError("Unknown configuration specified for node {}".format(self.name))
 
         ports = {self.http_port: self._find_open_port()}
-        if profiling:
+        if profiler:
             ports[10001] = self._find_open_port()
 
         log_levels = ('trace', 'debug', 'info', 'warn', 'error')
@@ -405,13 +366,12 @@ class Node(object):
             cpuset_cpus=cpus,
             mem_limit=memory,
             environment={
-                'profile': 'true' if profiling else 'false',
+                'profile': 'true' if profiler else 'false',
                 'log_level': log_level.upper(),
                 'console_log_level': console_log_level.upper(),
                 'file_log_level': file_log_level.upper(),
                 'cluster_name': self.cluster.name,
-                'core_partitions': core_partitions,
-                'data_partitions': data_partitions
+                'profiles': ','.join(profiles) if profiles is not None else None
             })
         self.client = AtomixClient(port=self.local_port)
         return self

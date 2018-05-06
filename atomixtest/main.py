@@ -6,18 +6,15 @@ import sys
 def setup(args):
     Cluster(args.cluster).setup(
         args.nodes,
-        type=args.type,
         subnet=args.subnet,
         gateway=args.gateway,
-        discover=args.discover,
-        cpu=args.cpu,
+        cpus=args.cpu,
         memory=args.memory_limit,
-        profiling=args.profiling,
+        profiler=args.profiler,
         log_level=args.log_level,
         console_log_level=args.console_level,
         file_log_level=args.file_level,
-        core_partitions=args.core_partitions,
-        data_partitions=args.data_partitions
+        profiles=args.profiles
     )
 
 def teardown(args):
@@ -26,7 +23,7 @@ def teardown(args):
     cluster.cleanup()
 
 def add_node(args):
-    get_cluster(args.cluster).add_node(args.type)
+    get_cluster(args.cluster).add_node(profiles=args.profiles)
 
 def remove_node(args):
     get_cluster(args.cluster).remove_node(args.node)
@@ -153,25 +150,22 @@ def _create_parser():
 
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
     setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
-    setup_parser.add_argument('-t', '--type', choices=['core', 'data', 'client'], default='core', help="The type of cluster to form")
-    setup_parser.add_argument('-d', '--discover', action='store_true', default=False, help="Whether to enable multicast discovery")
     setup_parser.add_argument('-s', '--subnet', help="The subnet in which to create the cluster")
     setup_parser.add_argument('-g', '--gateway', help="The IPv4 gateway for the master subnet")
     setup_parser.add_argument('-c', '--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
     setup_parser.add_argument('-m', '--memory-limit', help="The per-container memory limit")
-    setup_parser.add_argument('-p', '--profiling', action='store_true', default=False, help="Enable profiling")
     setup_parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
     setup_parser.add_argument('-o', '--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
     setup_parser.add_argument('-f', '--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
-    setup_parser.add_argument('-cp', '--core-partitions', type=int, default=7, help="The number of core partitions")
-    setup_parser.add_argument('-dp', '--data-partitions', type=int, default=71, help="The number of data partitions")
+    setup_parser.add_argument('-p', '--profiles', nargs='*', choices=['consensus', 'data-grid', 'client'], default=['consensus', 'data-grid'], help="The profiles with which to setup the cluster")
+    setup_parser.add_argument('--profiler', choices=['yourkit'], help="Enable profiling")
     setup_parser.set_defaults(func=setup)
 
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")
     teardown_parser.set_defaults(func=teardown)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
-    add_node_parser.add_argument('-t', '--type', choices=['core', 'data', 'client'], default='data', help="The type of node to add")
+    add_node_parser.add_argument('-p', '--profiles', nargs='*', choices=['consensus', 'data-grid', 'client'], default=['client'], help="The profiles with which to setup the cluster")
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")
