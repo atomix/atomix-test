@@ -1,6 +1,7 @@
 from imp import find_module, load_module
 from inspect import isfunction
-import os
+import os, sys, traceback
+from logging import set_logger, reset_logger, logger
 
 MODULE_EXTENSIONS = '.py'
 
@@ -48,8 +49,12 @@ def run(*paths):
         for func in funcs:
             print "Running {}".format(func.__name__)
             try:
+                set_logger(func.__name__)
                 func()
             except Exception, e:
-                print e
+                logger.error(func.__name__ + ' failed with an exception')
+                traceback.print_exc(file=sys.stdout)
                 return 1
+            finally:
+                reset_logger()
     return 0
