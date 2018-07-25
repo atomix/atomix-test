@@ -73,7 +73,8 @@ class Network(object):
             pool_configs=[ipam_pool]
         )
         logger.info("Creating network")
-        self._docker_client.networks.create(self.name, driver='bridge', ipam=ipam_config)
+        labels = {'atomix-test': 'true', 'atomix-cluster': self.name}
+        self._docker_client.networks.create(self.name, driver='bridge', ipam=ipam_config, labels=labels)
 
     def teardown(self):
         """Tears down the network."""
@@ -296,3 +297,13 @@ class Network(object):
             return '{}-{}'.format(self.name, int(name))
         except ValueError:
             return name
+
+def get_networks():
+    docker_client = docker.from_env()
+    docker_api_client = APIClient(kwargs_from_env())
+    networks = docker_client.networks.list(filters={'label': 'atomix-test=true'})
+    nets = set()
+    for network in networks:
+        network_name = docker_api_client.inspect_network(network.name)['Config']['Labels']['atomix-cluster']
+        nets.add(network_name)
+    return [Network(name) for name in nets]

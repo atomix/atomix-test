@@ -1,7 +1,10 @@
 from cluster import get_cluster, get_clusters, Cluster
+from network import get_networks
 from utils import clusters_to_str, cluster_to_str
 from errors import TestError
 import sys
+import os
+import shutil
 
 def setup(args):
     Cluster(args.cluster).setup(
@@ -22,6 +25,17 @@ def teardown(args):
     cluster.teardown()
     if args.delete:
         cluster.cleanup()
+
+def cleanup(args):
+    clusters = get_clusters()
+    for cluster in clusters:
+        cluster.teardown()
+    for network in get_networks():
+        network.teardown()
+    if args.delete:
+        path = os.path.join(os.getcwd(), '.data')
+        if os.path.exists(path):
+            shutil.rmtree(path)
 
 def add_node(args):
     get_cluster(args.cluster).add_node(*args.config)
@@ -165,6 +179,10 @@ def _create_parser():
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")
     teardown_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
     teardown_parser.set_defaults(func=teardown)
+
+    cleanup_parser = cluster_subparsers.add_parser('cleanup', help="Cleans up all test clusters")
+    cleanup_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
+    cleanup_parser.set_defaults(func=cleanup)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
     add_node_parser.add_argument('config', nargs='+', help="The configuration(s) to apply to the node")
