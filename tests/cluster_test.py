@@ -39,16 +39,3 @@ def test_consensus_cluster_membership():
         node = cluster.node(1)
         assert len(node.client.cluster.nodes()) == 3, "number of nodes is not equal to 3"
         assert node.client.cluster.node().id == node.name, "node identifier is not " + node.name
-
-def test_setup_shutdown_cluster():
-    logger.debug('This is a debug message')
-    logger.info('This is an info message')
-    logger.warn('This is a warn message')
-    logger.error('This is an error message')
-
-def test_add_node():
-    logger.debug('This is another debug message')
-    logger.info('This is another info message')
-    logger.warn('This is another warn message')
-    logger.error('This is another error message')
-    raise ValueError("Something went wrong!")

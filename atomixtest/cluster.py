@@ -242,6 +242,40 @@ class Cluster(object):
         return '\n'.join(lines)
 
 
+class TestClient(AtomixClient):
+    """Atomix test client."""
+    def __init__(self, host='127.0.0.1', port=5678):
+        super(TestClient, self).__init__(host, port)
+
+    def get(self, path, headers=None, *args, **kwargs):
+        logger.debug('GET {}'.format(path))
+        try:
+            return super(TestClient, self).get(path, headers, *args, **kwargs)
+        except:
+            logger.error('GET {}'.format(path))
+
+    def post(self, path, data=None, headers=None, *args, **kwargs):
+        logger.debug('POST {}'.format(path))
+        try:
+            return super(TestClient, self).post(path, data, headers, *args, **kwargs)
+        except:
+            logger.error('POST {}'.format(path))
+
+    def put(self, path, data=None, headers=None, *args, **kwargs):
+        logger.debug('PUT {}'.format(path))
+        try:
+            return super(TestClient, self).put(path, data, headers, *args, **kwargs)
+        except:
+            logger.error('PUT {}'.format(path))
+
+    def delete(self, path, headers=None, *args, **kwargs):
+        logger.debug('DELETE {}'.format(path))
+        try:
+            return super(TestClient, self).delete(path, headers, *args, **kwargs)
+        except:
+            logger.error('DELETE {}'.format(path))
+
+
 class Node(object):
     """Atomix test node."""
     def __init__(self, name, ip, cluster, bootstrap, process_id=None):
@@ -256,7 +290,7 @@ class Node(object):
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
         try:
-            self.client = AtomixClient(port=self.local_port)
+            self.client = TestClient(port=self.local_port)
         except UnknownNodeError:
             self.client = None
 
@@ -441,7 +475,7 @@ class Node(object):
                 'NODE_ADDRESS': self.address,
                 'DATA_DIR': '/data'
             })
-        self.client = AtomixClient(port=self.local_port)
+        self.client = TestClient(port=self.local_port)
         return self
 
     def run(self, *command):
