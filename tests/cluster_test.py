@@ -33,6 +33,12 @@ def test_add_remove_weak_data_grid_client():
         node = cluster.add_node('client')
         node.remove()
 
+def test_add_many_clients():
+    """Tests adding many clients to a cluster."""
+    with create_cluster('strong-data-grid', nodes=5) as cluster:
+        for _ in range(10):
+            cluster.add_node('client')
+
 def test_setup_shutdown_cluster():
     logger.debug('This is a debug message')
     logger.info('This is an info message')

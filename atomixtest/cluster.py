@@ -126,6 +126,8 @@ class Cluster(object):
             bootstrap=False,
             process_id=self.process_id
         )
+        self._nodes.append(node)
+
         node.setup(
             *configs,
             cpus=self.cpus,
@@ -140,7 +142,9 @@ class Cluster(object):
     def remove_node(self, id):
         """Removes a node from the cluster."""
         logger.info("Removing a node from the cluster")
-        self.node(id).teardown()
+        node = self.node(id)
+        node.teardown()
+        self._nodes.remove(node)
 
     def wait_for_start(self):
         """Waits for a cluster to finish startup."""
@@ -554,10 +558,13 @@ class Node(object):
     def teardown(self):
         """Tears down the node."""
         container = self.docker_container
-        logger.info("Stopping container %s", self.name)
-        container.stop()
-        logger.info("Removing container %s", self.name)
-        container.remove()
+        try:
+            logger.info("Stopping container %s", self.name)
+            container.stop()
+            logger.info("Removing container %s", self.name)
+            container.remove()
+        except:
+            pass
 
     def wait_for_start(self, timeout=60):
         """Waits for the node to finish startup."""
@@ -571,6 +578,9 @@ class Node(object):
     def wait_for_stop(self):
         """Waits for the node to exit."""
         self.docker_container.wait()
+
+    def __eq__(self, other):
+        return isinstance(other, Node) and self.name == other.name
 
     def __enter__(self):
         return self
