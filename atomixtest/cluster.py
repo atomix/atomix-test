@@ -4,14 +4,14 @@ import shutil
 import socket
 import time
 from atomix import AtomixClient
-from datetime import datetime
 from docker.api.client import APIClient
 from docker.utils import kwargs_from_env
 from six.moves import shlex_quote
+from threading import Thread
 
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
-from network import Network
 from logging import logger
+from network import Network
 from utils import with_context
 
 
@@ -172,11 +172,19 @@ class Cluster(object):
     def teardown(self):
         """Tears down the cluster."""
         logger.info("Tearing down cluster")
+
+        threads = []
         for node in self.nodes():
             try:
-                node.teardown()
+                thread = Thread(target=lambda: node.teardown())
+                threads.append(thread)
+                thread.start()
             except UnknownNodeError, e:
                 logger.error(str(e))
+
+        for thread in threads:
+            thread.join()
+
         try:
             self.network.teardown()
         except UnknownNetworkError, e:
@@ -595,8 +603,6 @@ def get_clusters(process_id=None):
         if process_id is None or process_id == docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-process']:
             cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
             clusters.add(cluster_name)
-        else:
-            print process_id + ' != ' + docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-process']
     return [Cluster(name) for name in clusters]
 
 
