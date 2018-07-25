@@ -1,9 +1,0 @@
-cluster:
-  name: ${env:cluster_name}
-partition-groups:
-  - name: core
-    type: raft
-    partitions: ${env:core_partitions}
-  - name: data
-    type: multi-primary
-    partitions: ${env:data_partitions}

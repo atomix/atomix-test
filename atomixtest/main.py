@@ -5,7 +5,8 @@ import sys
 
 def setup(args):
     Cluster(args.cluster).setup(
-        args.nodes,
+        *args.config,
+        nodes=args.nodes,
         subnet=args.subnet,
         gateway=args.gateway,
         cpus=args.cpu,
@@ -13,17 +14,17 @@ def setup(args):
         profiler=args.profiler,
         log_level=args.log_level,
         console_log_level=args.console_level,
-        file_log_level=args.file_level,
-        profiles=args.profiles
+        file_log_level=args.file_level
     )
 
 def teardown(args):
     cluster = get_cluster(args.cluster)
     cluster.teardown()
-    cluster.cleanup()
+    if args.delete:
+        cluster.cleanup()
 
 def add_node(args):
-    get_cluster(args.cluster).add_node(profiles=args.profiles)
+    get_cluster(args.cluster).add_node(*args.config)
 
 def remove_node(args):
     get_cluster(args.cluster).remove_node(args.node)
@@ -149,6 +150,7 @@ def _create_parser():
     cluster_subparsers = cluster_parser.add_subparsers(dest='action', help="The action to execute")
 
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
+    setup_parser.add_argument('config', nargs='+', help="The configuration(s) to apply to the cluster")
     setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
     setup_parser.add_argument('-s', '--subnet', help="The subnet in which to create the cluster")
     setup_parser.add_argument('-g', '--gateway', help="The IPv4 gateway for the master subnet")
@@ -157,15 +159,15 @@ def _create_parser():
     setup_parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
     setup_parser.add_argument('-o', '--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
     setup_parser.add_argument('-f', '--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
-    setup_parser.add_argument('-p', '--profiles', nargs='*', choices=['consensus', 'data-grid', 'client'], default=['consensus', 'data-grid'], help="The profiles with which to setup the cluster")
     setup_parser.add_argument('--profiler', choices=['yourkit'], help="Enable profiling")
     setup_parser.set_defaults(func=setup)
 
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")
+    teardown_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
     teardown_parser.set_defaults(func=teardown)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
-    add_node_parser.add_argument('-p', '--profiles', nargs='*', choices=['consensus', 'data-grid', 'client'], default=['client'], help="The profiles with which to setup the cluster")
+    add_node_parser.add_argument('config', nargs='+', help="The configuration(s) to apply to the node")
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")

@@ -1,17 +1,19 @@
-from network import Network
-from atomix import AtomixClient
-from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
-from utils import logger, with_context
-from six.moves import shlex_quote
-from datetime import datetime
-import shutil
-import os
 import docker
+import os
+import shutil
 import socket
+import tempfile
 import time
-import uuid
+from atomix import AtomixClient
+from datetime import datetime
 from docker.api.client import APIClient
 from docker.utils import kwargs_from_env
+from six.moves import shlex_quote
+
+from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
+from network import Network
+from utils import logger, with_context
+
 
 class Cluster(object):
     """Atomix test cluster."""
@@ -48,9 +50,9 @@ class Cluster(object):
         else:
             return [node for node in self.nodes() if node.name == id].pop()
 
-    def nodes(self, *types):
+    def nodes(self, bootstrap=False):
         """Returns a list of nodes in the cluster."""
-        return [node for node in self._nodes if len(types) == 0 or node.type in types]
+        return [node for node in self._nodes if bootstrap is False or node.bootstrap]
 
     def _load_nodes(self):
         """Returns a list of nodes in the cluster."""
@@ -60,62 +62,55 @@ class Cluster(object):
         nodes = []
         for container in containers:
             container_info = self._docker_api_client.inspect_container(container.name)
-            nodes.append(Node(container.name, container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'], container_info['Config']['Labels']['atomix-type'], self))
+            nodes.append(Node(
+                container.name,
+                container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'],
+                self,
+                container_info['Config']['Labels']['atomix-bootstrap'] == 'true'))
         return nodes
 
     def _node_name(self, id):
         return '{}-{}'.format(self.name, id)
 
-    def setup(
-            self,
-            nodes=3,
-            profiles=None,
-            supernet='172.18.0.0/16',
-            subnet=None,
-            gateway=None,
-            cpus=None,
-            memory=None,
-            profiler=False,
-            log_level='trace',
-            console_log_level='info',
-            file_log_level='info'):
+    def setup(self, *args, **kwargs):
         """Sets up the cluster."""
         self.log.info("Setting up cluster")
 
+        defaults = {
+            'nodes': 3,
+            'supernet': '172.18.0.0/16',
+            'subnet': None,
+            'gateway': None
+        }
+
+        def kwarg(name):
+            return kwargs.get(name, defaults[name])
+
         # Set up the test network.
-        self.network.setup(supernet, subnet, gateway)
+        self.network.setup(kwarg('supernet'), kwarg('subnet'), kwarg('gateway'))
 
         # Iterate through nodes and setup containers.
         setup_nodes = []
-        for n in range(1, nodes + 1):
-            node = Node(self._node_name(n), next(self.network.hosts), Node.Type.PERSISTENT, self)
+        for n in range(1, kwarg('nodes') + 1):
+            node = Node(self._node_name(n), next(self.network.hosts), self, bootstrap=True)
             self._nodes.append(node)
             setup_nodes.append(node)
 
         for node in setup_nodes:
-            node.setup(
-                profiles=profiles,
-                cpus=cpus,
-                memory=memory,
-                profiler=profiler,
-                log_level=log_level,
-                console_log_level=console_log_level,
-                file_log_level=file_log_level
-            )
+            node.setup(*args, **kwargs)
 
         self.log.info("Waiting for cluster bootstrap")
         self.wait_for_start()
         return self
 
-    def add_node(self, type='ephemeral', config=None, profiles=None):
+    def add_node(self, *configs):
         """Adds a new node to the cluster."""
         self.log.info("Adding a node to the cluster")
 
         # Create a new node instance and setup the node.
-        node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), type, self)
+        node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), self, bootstrap=False)
         node.setup(
-            config=config,
-            profiles=profiles,
+            *configs,
             cpus=self.cpus,
             memory=self.memory,
             profiler=self.profiler
@@ -232,15 +227,11 @@ class _ConfiguredCluster(Cluster):
 
 class Node(object):
     """Atomix test node."""
-    class Type(object):
-        PERSISTENT = 'persistent'
-        EPHEMERAL = 'ephemeral'
-
-    def __init__(self, name, ip, type, cluster):
+    def __init__(self, name, ip, cluster, bootstrap):
         self.log = logger(cluster.name)
         self.name = name
         self.ip = ip
-        self.type = type
+        self.bootstrap = bootstrap
         self.http_port = 5678
         self.tcp_port = 5679
         self.cluster = cluster
@@ -272,6 +263,10 @@ class Node(object):
     @property
     def id(self):
         return int(self.name.split('-')[-1])
+
+    @property
+    def address(self):
+        return '{}:{}'.format(self.ip, self.tcp_port)
 
     @property
     def status(self):
@@ -309,45 +304,90 @@ class Node(object):
         except docker.errors.NotFound:
             raise UnknownNodeError(self.name)
 
-    def setup(self, config=None, profiles=None, cpus=None, memory=None, profiler=False, log_level='trace', console_log_level='info', file_log_level='info'):
+    def setup(self, *configs, **kwargs):
         """Sets up the node."""
+
+        defaults = {
+            'cpus': None,
+            'memory': None,
+            'profiler': False,
+            'log_level': 'trace',
+            'console_log_level': 'info',
+            'file_log_level': 'info'
+        }
+
+        def kwarg(name):
+            return kwargs.get(name, defaults[name])
+
         args = []
-        args.append('%s@%s:%d' % (self.name, self.ip, self.tcp_port))
 
-        if config is not None:
-            args.append('--config')
-            args.append(config)
-        elif profiles is not None:
-            config = ""
-            config += "cluster:\n"
-            config += "  name: {}\n".format(self.cluster.name)
+        # Create a membership discovery configuration
+        discovery_config = []
+        discovery_config.append('{')
+        discovery_config.append('type: bootstrap')
 
-            config += "  members:\n"
-            nodes = self.cluster.nodes()
-            for node in nodes:
-                config += "    {}:\n".format(node.name)
-                config += "      type: {}\n".format(node.type)
-                config += "      address: {}:{}\n".format(node.ip, node.tcp_port)
+        # Create a members list variable to use for substitution
+        members_config = []
+        members_config.append('[')
 
-            config += "profiles:\n"
-            for profile in profiles:
-                config += "  - {}\n".format(profile)
+        # Populate the discovery and members list configurations from bootstrap members
+        i = 0
+        for node in self.cluster.nodes(bootstrap=True):
+            i += 1
+            discovery_config.append('nodes.{} {{'.format(i))
+            discovery_config.append('id: {}'.format(node.name))
+            discovery_config.append('address: "{}"'.format(node.address))
+            discovery_config.append('}')
+            members_config.append(node.name)
 
-            args.append('--config')
-            args.append(config)
-        else:
-            raise UnknownNodeError("Unknown configuration specified for node {}".format(self.name))
+        discovery_config.append('}')
+        members_config.append(']')
 
+        args.append('--config')
+        for config in configs:
+            config_file = None
+            for dirpath, dirnames, filenames in os.walk(os.path.join(os.path.dirname(__file__), '../config')):
+                for filename in filenames:
+                    if filename.endswith('.conf') and filename[0:-5] == config:
+                        config_file = os.path.join(dirpath, filename)
+                        break
+                if config_file is not None:
+                    break
+
+            if config_file is None:
+                config_file = config
+
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config_text = f.read()
+            else:
+                raise UnknownNodeError("Failed to locate configuration file: '{}'".format(config_file))
+
+            # Substitute the discovery and members list configurations in the provided configuration file
+            # TODO: Can this just be done via an environment variable?
+            config_text = config_text.replace('${DISCOVERY}', '\n'.join(discovery_config))
+            config_text = config_text.replace('${MEMBERS}', '\n'.join(members_config))
+
+            # Create a named temporary file to pass in to the Atomix agent process
+            with open(os.path.join(self.path, os.path.basename(config_file)), 'w+') as f:
+                f.truncate(0)
+                f.write(config_text)
+                args.append(os.path.join('/data', os.path.basename(f.name)))
+
+        # Find an open HTTP port and if profiling is enabled a profiler port to which to bind
         ports = {self.http_port: self._find_open_port()}
-        if profiler:
+        if kwarg('profiler'):
             ports[10001] = self._find_open_port()
 
+        # Function for determining whether one log level is greater than another
         log_levels = ('trace', 'debug', 'info', 'warn', 'error')
         def find_index(level):
             for i in range(len(log_levels)):
                 if log_levels[i] == level:
                     return i
 
+        # Set the base log level to the highest level
+        log_level, console_log_level, file_log_level = kwarg('log_level'), kwarg('console_log_level'), kwarg('file_log_level')
         if find_index(console_log_level) < find_index(log_level):
             log_level = console_log_level
         if find_index(file_log_level) < find_index(log_level):
@@ -358,21 +398,23 @@ class Node(object):
             'atomix',
             ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
-            labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-type': self.type},
+            labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-bootstrap': 'true' if self.bootstrap else 'false'},
             cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
             ports=ports,
             detach=True,
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
-            cpuset_cpus=cpus,
-            mem_limit=memory,
+            cpuset_cpus=kwarg('cpus'),
+            mem_limit=kwarg('memory'),
             environment={
-                'profile': 'true' if profiler else 'false',
+                'profile': 'true' if kwarg('profiler') else 'false',
                 'log_level': log_level.upper(),
                 'console_log_level': console_log_level.upper(),
                 'file_log_level': file_log_level.upper(),
-                'cluster_name': self.cluster.name,
-                'profiles': ','.join(profiles) if profiles is not None else None
+                'CLUSTER_ID': self.cluster.name,
+                'NODE_ID': self.name,
+                'NODE_ADDRESS': self.address,
+                'DATA_DIR': '/data'
             })
         self.client = AtomixClient(port=self.local_port)
         return self
