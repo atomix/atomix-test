@@ -2,6 +2,8 @@ from imp import find_module, load_module
 from inspect import isfunction
 import os, sys, traceback
 from logging import set_logger, reset_logger, logger
+import time
+from colorama import Fore, Back, init, Style
 
 MODULE_EXTENSIONS = '.py'
 
@@ -57,15 +59,23 @@ def run(*paths):
             funcs = scan_functions(module)
 
         for func in funcs:
+            start = time.time()
             name = _set_current_test(func.__name__)
-            print "Running {}".format(name)
+            text = "Running {}".format(name)
+            print ''.join(['-' for i in range(len(text))])
+            print text
+            print ''.join(['-' for i in range(len(text))])
             try:
                 set_logger(name)
                 func()
             except:
-                logger.error(name + ' failed with an exception')
+                end = time.time()
+                print Fore.RED + "{} failed in {} seconds".format(name, round(end - start, 4)) + Style.RESET_ALL
                 traceback.print_exc(file=sys.stdout)
                 return 1
+            else:
+                end = time.time()
+                print Fore.GREEN + "{} passed in {} seconds".format(name, round(end - start, 4)) + Style.RESET_ALL
             finally:
                 reset_logger()
                 _set_current_test(None)
