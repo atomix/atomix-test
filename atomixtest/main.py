@@ -119,8 +119,8 @@ def destress(args):
     get_cluster(args.cluster).destress(args.node)
 
 def run(args):
-    from pytest import main
-    sys.exit(main(args.args))
+    from test import run
+    sys.exit(run(*args.modules))
 
 def _create_parser():
     import argparse
@@ -286,7 +286,7 @@ def _create_parser():
     logs_parser.set_defaults(func=logs)
 
     run_parser = subparsers.add_parser('run', help="Run a test")
-    run_parser.add_argument('args', nargs='*', help="The tests to run")
+    run_parser.add_argument('modules', nargs='+', help="The modules or packages containing the test(s) to run")
     run_parser.set_defaults(func=run)
 
     return parser
