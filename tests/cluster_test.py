@@ -33,6 +33,13 @@ def test_add_remove_weak_data_grid_client():
         node = cluster.add_node('client')
         node.remove()
 
+def test_consensus_cluster_membership():
+    """Tests reading cluster membership from a consensus cluster."""
+    with create_cluster('consensus', nodes=3) as cluster:
+        node = cluster.node(1)
+        assert len(node.client.cluster.nodes()) == 3, "number of nodes is not equal to 3"
+        assert node.client.cluster.node().id == node.name, "node identifier is not " + node.name
+
 def test_setup_shutdown_cluster():
     logger.debug('This is a debug message')
     logger.info('This is an info message')

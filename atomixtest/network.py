@@ -80,7 +80,10 @@ class Network(object):
     def teardown(self):
         """Tears down the network."""
         logger.info("Removing network")
-        self.docker_network.remove()
+        try:
+            self.docker_network.remove()
+        except:
+            pass
 
     def partition(self, local, remote=None):
         """Partitions the given local from the given remote using a bi-directional partition."""

@@ -177,6 +177,5 @@ def run(paths, fail_fast=False):
     runner = TestRunner()
     try:
         return runner.run(paths, fail_fast)
-    except KeyboardInterrupt, e:
+    finally:
         runner.cleanup()
-        raise e
