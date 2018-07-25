@@ -561,6 +561,9 @@ class Node(object):
         try:
             logger.info("Stopping container %s", self.name)
             container.stop()
+        except:
+            pass
+        try:
             logger.info("Removing container %s", self.name)
             container.remove()
         except:
