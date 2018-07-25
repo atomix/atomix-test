@@ -5,6 +5,16 @@ from logging import set_logger, reset_logger, logger
 
 MODULE_EXTENSIONS = '.py'
 
+_name = None
+
+def _set_current_test(name):
+    global _name
+    _name = name
+    return name
+
+def get_current_test():
+    return _name
+
 def run(*paths):
     """Runs tests."""
     def find_functions(module, name=None):
@@ -47,14 +57,16 @@ def run(*paths):
             funcs = scan_functions(module)
 
         for func in funcs:
-            print "Running {}".format(func.__name__)
+            name = _set_current_test(func.__name__)
+            print "Running {}".format(name)
             try:
-                set_logger(func.__name__)
+                set_logger(name)
                 func()
-            except Exception, e:
-                logger.error(func.__name__ + ' failed with an exception')
+            except:
+                logger.error(name + ' failed with an exception')
                 traceback.print_exc(file=sys.stdout)
                 return 1
             finally:
                 reset_logger()
+                _set_current_test(None)
     return 0

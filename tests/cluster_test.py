@@ -1,4 +1,10 @@
 from atomixtest.logging import logger
+from atomixtest.cluster import create_cluster
+
+def test_setup_teardown_consensus_cluster():
+    """Tests setting up and tearing down a consensus cluster."""
+    with create_cluster('consensus', nodes=3):
+        pass
 
 def test_setup_shutdown_cluster():
     logger.debug('This is a debug message')

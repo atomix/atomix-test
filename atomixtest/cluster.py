@@ -12,6 +12,7 @@ from six.moves import shlex_quote
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
 from network import Network
 from logging import logger
+from test import get_current_test
 from utils import with_context
 
 
@@ -23,6 +24,9 @@ class Cluster(object):
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
         self._nodes = self._load_nodes()
+
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
 
     @property
     def path(self):
@@ -193,6 +197,7 @@ class Cluster(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.teardown()
+        self.cleanup()
 
     def __str__(self):
         lines = []
@@ -212,12 +217,13 @@ class Cluster(object):
 
 
 class _ConfiguredCluster(Cluster):
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, *args, **kwargs):
         super(_ConfiguredCluster, self).__init__(name)
+        self._args = args
         self._kwargs = kwargs
 
     def setup(self):
-        super(_ConfiguredCluster, self).setup(**self._kwargs)
+        super(_ConfiguredCluster, self).setup(*self._args, **self._kwargs)
 
     def __enter__(self):
         self.setup()
@@ -240,6 +246,9 @@ class Node(object):
             self.client = AtomixClient(port=self.local_port)
         except UnknownNodeError:
             self.client = None
+
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
 
     def __getattr__(self, name):
         try:
@@ -556,9 +565,9 @@ class Node(object):
         self.teardown()
 
 
-def create_cluster(name=None, **kwargs):
-    name = '{}-{}'.format(name, datetime.now().strftime('%Y%m%d%H%M%S'))
-    return _ConfiguredCluster(name, **kwargs)
+def create_cluster(*args, **kwargs):
+    name = '{}-{}'.format(get_current_test(), datetime.now().strftime('%Y%m%d%H%M%S'))
+    return _ConfiguredCluster(name, *args, **kwargs)
 
 
 def _find_cluster():
