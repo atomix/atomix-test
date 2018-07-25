@@ -12,15 +12,15 @@ from six.moves import shlex_quote
 from errors import UnknownClusterError, UnknownNetworkError, UnknownNodeError
 from network import Network
 from logging import logger
-from test import get_current_test
 from utils import with_context
 
 
 class Cluster(object):
     """Atomix test cluster."""
-    def __init__(self, name):
+    def __init__(self, name, process_id=None):
         self.name = name
-        self.network = Network(name)
+        self.process_id = process_id
+        self.network = Network(name, process_id)
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
         self._nodes = self._load_nodes()
@@ -69,7 +69,9 @@ class Cluster(object):
                 container.name,
                 container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'],
                 self,
-                container_info['Config']['Labels']['atomix-bootstrap'] == 'true'))
+                container_info['Config']['Labels']['atomix-bootstrap'] == 'true',
+                container_info['Config']['Labels']['atomix-process']
+            ))
         return nodes
 
     def _node_name(self, id):
@@ -95,7 +97,13 @@ class Cluster(object):
         # Iterate through nodes and setup containers.
         setup_nodes = []
         for n in range(1, kwarg('nodes') + 1):
-            node = Node(self._node_name(n), next(self.network.hosts), self, bootstrap=True)
+            node = Node(
+                self._node_name(n),
+                next(self.network.hosts),
+                self,
+                bootstrap=True,
+                process_id=self.process_id
+            )
             self._nodes.append(node)
             setup_nodes.append(node)
 
@@ -111,7 +119,13 @@ class Cluster(object):
         logger.info("Adding a node to the cluster")
 
         # Create a new node instance and setup the node.
-        node = Node(self._node_name(len(self.nodes())+1), next(self.network.hosts), self, bootstrap=False)
+        node = Node(
+            self._node_name(len(self.nodes())+1),
+            next(self.network.hosts),
+            self,
+            bootstrap=False,
+            process_id=self.process_id
+        )
         node.setup(
             *configs,
             cpus=self.cpus,
@@ -216,26 +230,13 @@ class Cluster(object):
         return '\n'.join(lines)
 
 
-class _ConfiguredCluster(Cluster):
-    def __init__(self, name, *args, **kwargs):
-        super(_ConfiguredCluster, self).__init__(name)
-        self._args = args
-        self._kwargs = kwargs
-
-    def setup(self):
-        super(_ConfiguredCluster, self).setup(*self._args, **self._kwargs)
-
-    def __enter__(self):
-        self.setup()
-        return self
-
-
 class Node(object):
     """Atomix test node."""
-    def __init__(self, name, ip, cluster, bootstrap):
+    def __init__(self, name, ip, cluster, bootstrap, process_id=None):
         self.name = name
         self.ip = ip
         self.bootstrap = bootstrap
+        self.process_id = process_id
         self.http_port = 5678
         self.tcp_port = 5679
         self.cluster = cluster
@@ -405,7 +406,12 @@ class Node(object):
             'atomix',
             ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
-            labels={'atomix-test': 'true', 'atomix-cluster': self.cluster.name, 'atomix-bootstrap': 'true' if self.bootstrap else 'false'},
+            labels={
+                'atomix-test': 'true',
+                'atomix-process': self.process_id or '',
+                'atomix-cluster': self.cluster.name,
+                'atomix-bootstrap': 'true' if self.bootstrap else 'false'
+            },
             cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
             ports=ports,
@@ -565,11 +571,6 @@ class Node(object):
         self.teardown()
 
 
-def create_cluster(*args, **kwargs):
-    name = '{}-{}'.format(get_current_test(), datetime.now().strftime('%Y%m%d%H%M%S'))
-    return _ConfiguredCluster(name, *args, **kwargs)
-
-
 def _find_cluster():
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
@@ -585,14 +586,17 @@ def get_cluster(name=None):
     return Cluster(name) if name is not None else _find_cluster()
 
 
-def get_clusters():
+def get_clusters(process_id=None):
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
     containers = docker_client.containers.list(filters={'label': 'atomix-test=true'})
     clusters = set()
     for container in containers:
-        cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
-        clusters.add(cluster_name)
+        if process_id is None or process_id == docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-process']:
+            cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
+            clusters.add(cluster_name)
+        else:
+            print process_id + ' != ' + docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-process']
     return [Cluster(name) for name in clusters]
 
 

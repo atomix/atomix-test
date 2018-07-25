@@ -134,7 +134,7 @@ def destress(args):
 
 def run(args):
     from test import run
-    sys.exit(run(*args.modules))
+    sys.exit(run(args.paths, fail_fast=args.fail_fast))
 
 def _create_parser():
     import argparse
@@ -304,7 +304,8 @@ def _create_parser():
     logs_parser.set_defaults(func=logs)
 
     run_parser = subparsers.add_parser('run', help="Run a test")
-    run_parser.add_argument('modules', nargs='+', help="The modules or packages containing the test(s) to run")
+    run_parser.add_argument('paths', nargs='+', help="The modules or packages containing the test(s) to run")
+    run_parser.add_argument('-ff', '--fail-fast', action='store_true', default=False, help="Whether to fail the test run on the first individual test failure")
     run_parser.set_defaults(func=run)
 
     return parser

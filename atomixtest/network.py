@@ -10,8 +10,9 @@ from six.moves import shlex_quote
 
 class Network(object):
     """Atomix test network."""
-    def __init__(self, name):
+    def __init__(self, name, process_id=None):
         self.name = name
+        self.process_id = process_id
         self._docker_client = docker.from_env()
         self._docker_api_client = APIClient(kwargs_from_env())
         self._hosts = None
@@ -73,7 +74,7 @@ class Network(object):
             pool_configs=[ipam_pool]
         )
         logger.info("Creating network")
-        labels = {'atomix-test': 'true', 'atomix-cluster': self.name}
+        labels = {'atomix-test': 'true', 'atomix-process': self.process_id or '', 'atomix-cluster': self.name}
         self._docker_client.networks.create(self.name, driver='bridge', ipam=ipam_config, labels=labels)
 
     def teardown(self):
@@ -298,12 +299,13 @@ class Network(object):
         except ValueError:
             return name
 
-def get_networks():
+def get_networks(process_id=None):
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
     networks = docker_client.networks.list(filters={'label': 'atomix-test=true'})
     nets = set()
     for network in networks:
-        network_name = docker_api_client.inspect_network(network.name)['Config']['Labels']['atomix-cluster']
-        nets.add(network_name)
+        if process_id is None or process_id == docker_api_client.inspect_network(network.name)['Labels']['atomix-process']:
+            network_name = docker_api_client.inspect_network(network.name)['Labels']['atomix-cluster']
+            nets.add(network_name)
     return [Network(name) for name in nets]
