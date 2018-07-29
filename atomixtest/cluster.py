@@ -377,25 +377,20 @@ class Node(object):
 
         # Create a membership discovery configuration
         discovery_config = []
-        discovery_config.append('{')
         discovery_config.append('type: bootstrap')
 
         # Create a members list variable to use for substitution
         members_config = []
-        members_config.append('[')
 
         # Populate the discovery and members list configurations from bootstrap members
         i = 0
         for node in self.cluster.nodes(bootstrap=True):
             i += 1
             discovery_config.append('nodes.{} {{'.format(i))
-            discovery_config.append('id: {}'.format(node.name))
-            discovery_config.append('address: "{}"'.format(node.address))
+            discovery_config.append('  id: {}'.format(node.name))
+            discovery_config.append('  address: "{}"'.format(node.address))
             discovery_config.append('}')
             members_config.append(node.name)
-
-        discovery_config.append('}')
-        members_config.append(']')
 
         args.append('--config')
         for config in configs:
@@ -417,10 +412,28 @@ class Node(object):
             else:
                 raise UnknownNodeError("Failed to locate configuration file: '{}'".format(config_file))
 
+            def replace(lines, property, values):
+                complete = False
+                while not complete:
+                    complete = True
+                    for i in range(len(lines)):
+                        line = lines[i]
+                        if line.strip() == property:
+                            spaces = 0
+                            for c in line:
+                                if c == ' ':
+                                    spaces += 1
+                                else:
+                                    break
+                            lines = lines[:i] + [''.join([' ' for _ in range(spaces)]) + value for value in values] + lines[i+1:]
+                            complete = False
+                return lines
+
             # Substitute the discovery and members list configurations in the provided configuration file
-            # TODO: Can this just be done via an environment variable?
-            config_text = config_text.replace('${DISCOVERY}', '\n'.join(discovery_config))
-            config_text = config_text.replace('${MEMBERS}', '\n'.join(members_config))
+            lines = config_text.split('\n')
+            lines = replace(lines, '${DISCOVERY}', discovery_config)
+            lines = replace(lines, '${MEMBERS}', members_config)
+            config_text = '\n'.join(lines)
 
             # Create a named temporary file to pass in to the Atomix agent process
             with open(os.path.join(self.path, os.path.basename(config_file)), 'w+') as f:
@@ -630,7 +643,7 @@ class Node(object):
 def _find_cluster():
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
-    containers = docker_client.containers.list(filters={'label': 'atomix-test=true'})
+    containers = docker_client.containers.list(all=True, filters={'label': 'atomix-test=true'})
     if len(containers) > 0:
         container = containers[0]
         cluster_name = docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-cluster']
@@ -645,7 +658,7 @@ def get_cluster(name=None):
 def get_clusters(process_id=None):
     docker_client = docker.from_env()
     docker_api_client = APIClient(kwargs_from_env())
-    containers = docker_client.containers.list(filters={'label': 'atomix-test=true'})
+    containers = docker_client.containers.list(all=True, filters={'label': 'atomix-test=true'})
     clusters = set()
     for container in containers:
         if process_id is None or process_id == docker_api_client.inspect_container(container.name)['Config']['Labels']['atomix-process']:
