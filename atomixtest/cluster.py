@@ -320,7 +320,7 @@ class Node(object):
 
     @property
     def address(self):
-        return '{}:{}'.format(self.ip, self.tcp_port)
+        return '{}:{}'.format(self.name, self.tcp_port)
 
     @property
     def status(self):
@@ -462,6 +462,7 @@ class Node(object):
             network=self.cluster.network.name,
             ports=ports,
             detach=True,
+            links=[(node.name, node.name) for node in self.cluster.nodes()],
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
             cpuset_cpus=kwarg('cpus'),
             mem_limit=kwarg('memory'),
