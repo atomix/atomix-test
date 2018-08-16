@@ -32,10 +32,10 @@ To view a list of cluster management commands, run `atomix-test cluster -h`
 
 ### Create a new test cluster
 
-To create a new test cluster, use the `setup` command:
+To create a new test cluster, use the `setup` command, providing a named configuration for the nodes to run:
 
 ```
-> atomix-test cluster my-cluster setup
+> atomix-test cluster -i my-cluster setup -c consensus
 my-cluster Setting up cluster
 my-cluster Creating network
 my-cluster Running container my-cluster-1
@@ -47,7 +47,7 @@ my-cluster Waiting for cluster bootstrap
 To configure the cluster with more than three nodes, pass a `--nodes` or `-n` argument:
 
 ```
-> atomix-test cluster my-cluster setup -n 5
+> atomix-test cluster -i my-cluster setup -n 5
 ```
 
 Running the `setup` command will set up a new Docker network and a set of containers.
@@ -81,7 +81,7 @@ my-other-cluster
 To list the nodes in a cluster, use the `nodes` command:
 
 ```
-> atomix-test cluster my-cluster nodes
+> atomix-test cluster -i my-cluster nodes
 ID     NAME             STATUS      IP             LOCAL PORT
 1      my-cluster-1     running     172.18.0.2     61170
 2      my-cluster-2     running     172.18.0.3     61171
@@ -100,13 +100,13 @@ running.
 To add a node to a cluster, use the `add-node` command:
 
 ```
-> atomix-test cluster my-cluster add-node
+> atomix-test cluster -i my-cluster add-node -c client
 ```
 
 To remove a node from a cluster, use the `remove-node` command, passing the node ID as the last argument:
 
 ```
-> atomix-test cluster my-cluster remove-node 4
+> atomix-test cluster -i my-cluster remove-node 4
 ```
 
 ### Shutdown a cluster
@@ -114,7 +114,7 @@ To remove a node from a cluster, use the `remove-node` command, passing the node
 To shutdown a cluster, use the `teardown` command:
 
 ```
-> atomix-test cluster my-cluster teardown
+> atomix-test cluster -i my-cluster teardown
 my-cluster Tearing down cluster
 my-cluster Stopping container my-cluster-1
 my-cluster Removing container my-cluster-1
@@ -128,29 +128,14 @@ my-cluster Cleaning up cluster state
 
 ## Writing tests
 
-Tests are written and run using [pytest](https://docs.pytest.org/en/latest/), which relies
-primarily on simple `assert` statements.
-
 To create a cluster in a test, use the `create_cluster` function:
 
 ```python
-from atomixtest.cluster import create_cluster
+from atomixtest import create_cluster
 
-with create_cluster('test', nodes=3) as cluster:
-  node = cluster.node(1)
-  ...
-```
-
-Alternatively, the test framework provides a `@with_cluster` decorator which can be used
-to inject per-test clusters:
-
-```python
-from atomixtest import with_cluster
-
-@with_cluster(nodes=3)
-def test_map(cluster):
-  node = cluster.node(1)
-  ...
+with create_cluster('consensus', nodes=3) as cluster:
+    node = cluster.node(1)
+    ...
 ```
 
 By default, a cluster with the same name as the test function - e.g. `test_map` - will be
@@ -163,16 +148,16 @@ and nodes.
 The same test cluster management functions are available via the `Cluster` object:
 
 ```python
-@with_cluster(nodes=3)
-def test_resize(cluster):
-  # Add a node to the cluster
-  cluster.add_node()
+def test_resize():
+    with create_cluster('consensus', nodes=3) as cluster:
+        # Add a node to the cluster
+        cluster.add_node()
 
-  # Add a client node to the cluster
-  cluster.add_node(type='client')
+        # Add a client node to the cluster
+        cluster.add_node(type='client')
 
-  # Remove a node from the cluster
-  cluster.remove_node(4)
+        # Remove a node from the cluster
+        cluster.remove_node(4)
 ```
 
 ### Accessing primitives
@@ -186,14 +171,15 @@ node = cluster.node(1)
 Each node is also an Atomix REST client from which primitive instances can be created:
 
 ```python
-@with_cluster(nodes=3)
-def test_map(cluster):
-  node = cluster.add_node(type='client')
-  map = node.map('test-map')
-  assert map.get('foo') is None
-  assert map.put('foo', 'Hello world!') is None
-  assert map.get('foo')['value'] == 'Hello world!'
+with create_cluster('consensus', nodes=3) as cluster:
+    node = cluster.add_node(type='client')
+    map = node.map('test-map')
+    assert map.get('foo') is None
+    assert map.put('foo', 'Hello world!') is None
+    assert map.get('foo')['value'] == 'Hello world!'
 ```
+
+Tests are written using simple `assert` statements like the above.
 
 ### Fault injection
 
@@ -201,44 +187,42 @@ The `Cluster`, `Network` and `Node` objects have various methods for injecting n
 and node failures in tests.
 
 ```python
-@with_cluster(nodes=3)
-def test_map(cluster):
-  # Kill a node
-  cluster.node(1).kill()
+with create_cluster('consensus', nodes=3) as cluster:
+    # Kill a node
+    cluster.node(1).kill()
 
-  # Restart the node
-  cluster.node(1).start()
+    # Restart the node
+    cluster.node(1).start()
 
-  # Partition a node from all other nodes
-  cluster.node(1).isolate()
+    # Partition a node from all other nodes
+    cluster.node(1).isolate()
 
-  # Heal the isolated node
-  cluster.node(1).unisolate()
+    # Heal the isolated node
+    cluster.node(1).unisolate()
 
-  # Partition one node from another node
-  cluster.node(1).partition(cluster.node(2))
+    # Partition one node from another node
+    cluster.node(1).partition(cluster.node(2))
 
-  # Inject latency in the network and attempt to write to a map
-  with cluster.network.delay(latency=100):
-    cluster.node(2).map('test-map').put('bar', 'baz')
+    # Inject latency in the network and attempt to write to a map
+    with cluster.network.delay(latency=100):
+        cluster.node(2).map('test-map').put('bar', 'baz')
 ```
 
 Fault injection methods also support a context manager that can be used to encapsulate
 blocks of code to be executed during the failure.
 
 ```python
-@with_cluster(nodes=3)
-def test_map(cluster):
-  node1 = cluster.node(1)
-  node2 = cluster.node(2)
+with create_cluster('consensus', nodes=3) as cluster:
+    node1 = cluster.node(1)
+    node2 = cluster.node(2)
 
-  # Test writing to a map with the cluster under load.
-  with cluster.stress(cpu=4):
-    node1.map('test-map').put('foo', 'bar')
+    # Test writing to a map with the cluster under load.
+    with cluster.stress(cpu=4):
+        node1.map('test-map').put('foo', 'bar')
   
-  # Test that a map can be read from node 2 while node 1 is partitioned.
-  with node1.isolate():
-    assert node2.map('test-map').get('foo')['value'] == 'bar'
+   # Test that a map can be read from node 2 while node 1 is partitioned.
+    with node1.isolate():
+        assert node2.map('test-map').get('foo')['value'] == 'bar'
 ```
 
 ### Cluster

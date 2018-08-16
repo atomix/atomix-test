@@ -1,4 +1,4 @@
-from atomixtest import create_cluster, logger
+from atomixtest import create_cluster
 
 def test_setup_teardown_consensus_cluster():
     """Tests setting up and tearing down a consensus cluster"""

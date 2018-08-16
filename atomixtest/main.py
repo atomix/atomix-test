@@ -7,7 +7,7 @@ import os
 import shutil
 
 def setup(args):
-    Cluster(args.cluster).setup(
+    Cluster(args.name).setup(
         *args.config,
         nodes=args.nodes,
         subnet=args.subnet,
@@ -21,7 +21,7 @@ def setup(args):
     )
 
 def teardown(args):
-    cluster = get_cluster(args.cluster)
+    cluster = get_cluster(args.name)
     cluster.teardown()
     if args.delete:
         cluster.cleanup()
@@ -38,48 +38,48 @@ def cleanup(args):
             shutil.rmtree(path)
 
 def add_node(args):
-    get_cluster(args.cluster).add_node(*args.config)
+    get_cluster(args.name).add_node(*args.config)
 
 def remove_node(args):
-    get_cluster(args.cluster).remove_node(args.node)
+    get_cluster(args.name).remove_node(args.node)
 
 def list_clusters(args):
     print clusters_to_str(get_clusters())
 
 def cluster_info(args):
-    if args.cluster is not None:
-        print get_cluster(args.cluster)
+    if args.name is not None:
+        print get_cluster(args.name)
     else:
         print '\n'.join([str(cluster) for cluster in get_clusters()])
 
 def cluster_nodes(args):
-    print cluster_to_str(get_cluster(args.cluster))
+    print cluster_to_str(get_cluster(args.name))
 
 def stop(args):
-    get_cluster(args.cluster).node(args.node).stop()
+    get_cluster(args.name).node(args.node).stop()
 
 def start(args):
-    get_cluster(args.cluster).node(args.node).start()
+    get_cluster(args.name).node(args.node).start()
 
 def kill(args):
-    get_cluster(args.cluster).node(args.node).kill()
+    get_cluster(args.name).node(args.node).kill()
 
 def recover(args):
-    get_cluster(args.cluster).node(args.node).recover()
+    get_cluster(args.name).node(args.node).recover()
 
 def restart(args):
-    get_cluster(args.cluster).node(args.node).restart()
+    get_cluster(args.name).node(args.node).restart()
 
 def attach(args):
     try:
-        for line in get_cluster(args.cluster).node(args.node).attach():
+        for line in get_cluster(args.name).node(args.node).attach():
             sys.stdout.write(line)
             sys.stdout.flush()
     except KeyboardInterrupt:
         pass
 
 def logs(args):
-    output = get_cluster(args.cluster).node(args.node).logs(stream=args.stream)
+    output = get_cluster(args.name).node(args.node).logs(stream=args.stream)
     if isinstance(output, basestring):
         print output
     else:
@@ -91,46 +91,46 @@ def logs(args):
             pass
 
 def partition(args):
-    get_cluster(args.cluster).network.partition(args.local, args.remote)
+    get_cluster(args.name).network.partition(args.local, args.remote)
 
 def partition_halves(args):
-    get_cluster(args.cluster).network.partition_halves()
+    get_cluster(args.name).network.partition_halves()
 
 def partition_random(args):
-    get_cluster(args.cluster).network.partition_random()
+    get_cluster(args.name).network.partition_random()
 
 def partition_bridge(args):
-    get_cluster(args.cluster).network.partition_bridge(args.node)
+    get_cluster(args.name).network.partition_bridge(args.node)
 
 def partition_isolate(args):
-    get_cluster(args.cluster).network.partition_isolate(args.node)
+    get_cluster(args.name).network.partition_isolate(args.node)
 
 def heal(args):
-    get_cluster(args.cluster).network.heal(args.local, args.remote)
+    get_cluster(args.name).network.heal(args.local, args.remote)
 
 def delay(args):
-    get_cluster(args.cluster).network.delay(args.node, args.latency, args.jitter, args.correlation, args.distribution)
+    get_cluster(args.name).network.delay(args.node, args.latency, args.jitter, args.correlation, args.distribution)
 
 def drop(args):
-    get_cluster(args.cluster).network.drop(args.node, args.probability, args.correlation)
+    get_cluster(args.name).network.drop(args.node, args.probability, args.correlation)
 
 def reorder(args):
-    get_cluster(args.cluster).network.reorder(args.node, args.probability, args.correlation)
+    get_cluster(args.name).network.reorder(args.node, args.probability, args.correlation)
 
 def duplicate(args):
-    get_cluster(args.cluster).network.duplicate(args.node, args.probability, args.correlation)
+    get_cluster(args.name).network.duplicate(args.node, args.probability, args.correlation)
 
 def corrupt(args):
-    get_cluster(args.cluster).network.corrupt(args.node, args.probability)
+    get_cluster(args.name).network.corrupt(args.node, args.probability)
 
 def restore(args):
-    get_cluster(args.cluster).network.restore(args.node)
+    get_cluster(args.name).network.restore(args.node)
 
 def stress(args):
-    get_cluster(args.cluster).stress(args.node, args.timeout, args.cpu, args.io, args.memory, args.hdd)
+    get_cluster(args.name).stress(args.node, args.timeout, args.cpu, args.io, args.memory, args.hdd)
 
 def destress(args):
-    get_cluster(args.cluster).destress(args.node)
+    get_cluster(args.name).destress(args.node)
 
 def run(args):
     from test import run
@@ -159,20 +159,20 @@ def _create_parser():
     subparsers = parser.add_subparsers()
 
     cluster_parser = subparsers.add_parser('cluster', help="Cluster commands")
-    cluster_parser.add_argument('cluster', nargs='?', help="The cluster on which to operate")
+    cluster_parser.add_argument('-i', '--name', required=False, default='test', help="The cluster on which to operate")
 
     cluster_subparsers = cluster_parser.add_subparsers(dest='action', help="The action to execute")
 
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
-    setup_parser.add_argument('config', nargs='+', help="The configuration(s) to apply to the cluster")
+    setup_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the cluster")
     setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
-    setup_parser.add_argument('-s', '--subnet', help="The subnet in which to create the cluster")
-    setup_parser.add_argument('-g', '--gateway', help="The IPv4 gateway for the master subnet")
-    setup_parser.add_argument('-c', '--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
-    setup_parser.add_argument('-m', '--memory-limit', help="The per-container memory limit")
-    setup_parser.add_argument('-l', '--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
-    setup_parser.add_argument('-o', '--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
-    setup_parser.add_argument('-f', '--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
+    setup_parser.add_argument('--subnet', help="The subnet in which to create the cluster")
+    setup_parser.add_argument('--gateway', help="The IPv4 gateway for the master subnet")
+    setup_parser.add_argument('--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
+    setup_parser.add_argument('--memory-limit', help="The per-container memory limit")
+    setup_parser.add_argument('--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
+    setup_parser.add_argument('--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
+    setup_parser.add_argument('--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
     setup_parser.add_argument('--profiler', choices=['yourkit'], help="Enable profiling")
     setup_parser.set_defaults(func=setup)
 
@@ -185,7 +185,7 @@ def _create_parser():
     cleanup_parser.set_defaults(func=cleanup)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
-    add_node_parser.add_argument('config', nargs='+', help="The configuration(s) to apply to the node")
+    add_node_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the node")
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")
