@@ -29,10 +29,10 @@ def clusters_to_str(clusters):
 
 def cluster_to_str(cluster):
     """Returns a string table for the given cluster."""
-    data = [['ID', 'NAME', 'STATUS', 'PATH', 'IP', 'LOCAL PORT', 'PROFILER PORT'],]
+    data = [['ID', 'NAME', 'VERSION', 'STATUS', 'PATH', 'IP', 'LOCAL PORT', 'PROFILER PORT'],]
     for node in cluster.nodes():
         profiler_port = node.profiler_port
-        data.append([node.id, node.name, node.status, node.path, node.ip, node.local_port, profiler_port if profiler_port is not None else ''])
+        data.append([node.id, node.name, node.version, node.status, node.path, node.ip, node.local_port, profiler_port if profiler_port is not None else ''])
     return _create_table(data)
 
 class Context(object):

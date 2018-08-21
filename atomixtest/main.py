@@ -10,6 +10,7 @@ def setup(args):
     Cluster(args.name).setup(
         *args.config,
         nodes=args.nodes,
+        version=args.version,
         subnet=args.subnet,
         gateway=args.gateway,
         cpus=args.cpu,
@@ -38,7 +39,7 @@ def cleanup(args):
             shutil.rmtree(path)
 
 def add_node(args):
-    get_cluster(args.name).add_node(*args.config)
+    get_cluster(args.name).add_node(*args.config, version=args.version)
 
 def remove_node(args):
     get_cluster(args.name).remove_node(args.node)
@@ -166,6 +167,7 @@ def _create_parser():
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
     setup_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the cluster")
     setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
+    setup_parser.add_argument('-v', '--version', type=str, default='latest', help="The version to setup")
     setup_parser.add_argument('--subnet', help="The subnet in which to create the cluster")
     setup_parser.add_argument('--gateway', help="The IPv4 gateway for the master subnet")
     setup_parser.add_argument('--cpu', help="CPUs in which to allow execution (0-3, 0,1)")

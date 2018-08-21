@@ -69,6 +69,7 @@ class Cluster(object):
                 container.name,
                 container_info['NetworkSettings']['Networks'][self.network.name]['IPAddress'],
                 self,
+                container_info['Config']['Labels']['atomix-version'],
                 container_info['Config']['Labels']['atomix-bootstrap'] == 'true',
                 container_info['Config']['Labels']['atomix-process']
             ))
@@ -85,7 +86,8 @@ class Cluster(object):
             'nodes': 3,
             'supernet': '172.18.0.0/16',
             'subnet': None,
-            'gateway': None
+            'gateway': None,
+            'version': 'latest'
         }
 
         def kwarg(name):
@@ -101,6 +103,7 @@ class Cluster(object):
                 self._node_name(n),
                 next(self.network.hosts),
                 self,
+                kwarg('version'),
                 bootstrap=True,
                 process_id=self.process_id
             )
@@ -114,7 +117,7 @@ class Cluster(object):
         self.wait_for_start()
         return self
 
-    def add_node(self, *configs):
+    def add_node(self, *args, **kwargs):
         """Adds a new node to the cluster."""
         logger.info("Adding a node to the cluster")
 
@@ -123,13 +126,14 @@ class Cluster(object):
             self._node_name(len(self.nodes())+1),
             next(self.network.hosts),
             self,
+            kwargs.get('version', 'latest'),
             bootstrap=False,
             process_id=self.process_id
         )
         self._nodes.append(node)
 
         node.setup(
-            *configs,
+            *args,
             cpus=self.cpus,
             memory=self.memory,
             profiler=self.profiler
@@ -278,9 +282,10 @@ class TestClient(AtomixClient):
 
 class Node(object):
     """Atomix test node."""
-    def __init__(self, name, ip, cluster, bootstrap, process_id=None):
+    def __init__(self, name, ip, cluster, version, bootstrap, process_id=None):
         self.name = name
         self.ip = ip
+        self.version = version
         self.bootstrap = bootstrap
         self.process_id = process_id
         self.http_port = 5678
@@ -462,14 +467,15 @@ class Node(object):
 
         logger.info("Running container %s", self.name)
         self._docker_client.containers.run(
-            'atomix',
+            'atomix/atomix' if self.version == 'latest' else 'atomix/atomix:{}'.format(self.version),
             ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
             labels={
                 'atomix-test': 'true',
                 'atomix-process': self.process_id or '',
                 'atomix-cluster': self.cluster.name,
-                'atomix-bootstrap': 'true' if self.bootstrap else 'false'
+                'atomix-bootstrap': 'true' if self.bootstrap else 'false',
+                'atomix-version': self.version
             },
             cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
