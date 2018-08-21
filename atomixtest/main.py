@@ -44,6 +44,9 @@ def add_node(args):
 def remove_node(args):
     get_cluster(args.name).remove_node(args.node)
 
+def upgrade_node(args):
+    get_cluster(args.name).upgrade_node(args.node, version=args.version)
+
 def list_clusters(args):
     print clusters_to_str(get_clusters())
 
@@ -188,11 +191,17 @@ def _create_parser():
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
     add_node_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the node")
+    add_node_parser.add_argument('-v', '--version', type=str, default='latest', help="The version to setup")
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")
     remove_node_parser.add_argument('node', type=name_or_id, help="The node to remove from the cluster")
     remove_node_parser.set_defaults(func=remove_node)
+
+    upgrade_node_parser = cluster_subparsers.add_parser('upgrade-node', help="Upgrade a node")
+    upgrade_node_parser.add_argument('node', type=name_or_id, help="The node to upgrade")
+    upgrade_node_parser.add_argument('-v', '--version', type=str, default='latest', help="The version to which to upgrade")
+    upgrade_node_parser.set_defaults(func=upgrade_node)
 
     list_clusters_parser = cluster_subparsers.add_parser('list', help="Get a list of test clusters")
     list_clusters_parser.set_defaults(func=list_clusters)

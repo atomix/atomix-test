@@ -150,6 +150,14 @@ class Cluster(object):
         node.teardown()
         self._nodes.remove(node)
 
+    def upgrade_node(self, id, version='latest'):
+        """Upgrades the node to the given version."""
+        logger.info("Upgrading node {} to version '{}'".format(id, version))
+        node = self.node(id)
+        node.upgrade(version)
+        node.wait_for_start()
+        return node
+
     def wait_for_start(self):
         """Waits for a cluster to finish startup."""
         for node in self.nodes():
@@ -397,54 +405,60 @@ class Node(object):
             discovery_config.append('}')
             members_config.append(node.name)
 
-        args.append('--config')
-        for config in configs:
-            config_file = None
-            for dirpath, dirnames, filenames in os.walk(os.path.join(os.path.dirname(__file__), '../config')):
-                for filename in filenames:
-                    if filename.endswith('.conf') and filename[0:-5] == config:
-                        config_file = os.path.join(dirpath, filename)
+        if len(configs) == 0:
+            args.append('--config')
+            for filename in os.listdir(self.path):
+                if filename.endswith('.conf'):
+                    args.append(os.path.join('/data', os.path.basename(filename)))
+        else:
+            args.append('--config')
+            for config in configs:
+                config_file = None
+                for dirpath, dirnames, filenames in os.walk(os.path.join(os.path.dirname(__file__), '../config')):
+                    for filename in filenames:
+                        if filename.endswith('.conf') and filename[0:-5] == config:
+                            config_file = os.path.join(dirpath, filename)
+                            break
+                    if config_file is not None:
                         break
-                if config_file is not None:
-                    break
 
-            if config_file is None:
-                config_file = config
+                if config_file is None:
+                    config_file = config
 
-            if os.path.exists(config_file):
-                with open(config_file, 'r') as f:
-                    config_text = f.read()
-            else:
-                raise UnknownNodeError("Failed to locate configuration file: '{}'".format(config_file))
+                if os.path.exists(config_file):
+                    with open(config_file, 'r') as f:
+                        config_text = f.read()
+                else:
+                    raise UnknownNodeError("Failed to locate configuration file: '{}'".format(config_file))
 
-            def replace(lines, property, values):
-                complete = False
-                while not complete:
-                    complete = True
-                    for i in range(len(lines)):
-                        line = lines[i]
-                        if line.strip() == property:
-                            spaces = 0
-                            for c in line:
-                                if c == ' ':
-                                    spaces += 1
-                                else:
-                                    break
-                            lines = lines[:i] + [''.join([' ' for _ in range(spaces)]) + value for value in values] + lines[i+1:]
-                            complete = False
-                return lines
+                def replace(lines, property, values):
+                    complete = False
+                    while not complete:
+                        complete = True
+                        for i in range(len(lines)):
+                            line = lines[i]
+                            if line.strip() == property:
+                                spaces = 0
+                                for c in line:
+                                    if c == ' ':
+                                        spaces += 1
+                                    else:
+                                        break
+                                lines = lines[:i] + [''.join([' ' for _ in range(spaces)]) + value for value in values] + lines[i+1:]
+                                complete = False
+                    return lines
 
-            # Substitute the discovery and members list configurations in the provided configuration file
-            lines = config_text.split('\n')
-            lines = replace(lines, '${DISCOVERY}', discovery_config)
-            lines = replace(lines, '${MEMBERS}', members_config)
-            config_text = '\n'.join(lines)
+                # Substitute the discovery and members list configurations in the provided configuration file
+                lines = config_text.split('\n')
+                lines = replace(lines, '${DISCOVERY}', discovery_config)
+                lines = replace(lines, '${MEMBERS}', members_config)
+                config_text = '\n'.join(lines)
 
-            # Create a named temporary file to pass in to the Atomix agent process
-            with open(os.path.join(self.path, os.path.basename(config_file)), 'w+') as f:
-                f.truncate(0)
-                f.write(config_text)
-                args.append(os.path.join('/data', os.path.basename(f.name)))
+                # Create a named temporary file to pass in to the Atomix agent process
+                with open(os.path.join(self.path, os.path.basename(config_file)), 'w+') as f:
+                    f.truncate(0)
+                    f.write(config_text)
+                    args.append(os.path.join('/data', os.path.basename(f.name)))
 
         # Find an open HTTP port and if profiling is enabled a profiler port to which to bind
         ports = {self.http_port: self._find_open_port()}
@@ -467,7 +481,7 @@ class Node(object):
 
         logger.info("Running container %s", self.name)
         self._docker_client.containers.run(
-            'atomix/atomix' if self.version == 'latest' else 'atomix/atomix:{}'.format(self.version),
+            'atomix/atomix:{}'.format(self.version),
             ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
             labels={
@@ -497,6 +511,12 @@ class Node(object):
             })
         self.client = TestClient(port=self.local_port)
         return self
+
+    def upgrade(self, version):
+        """Upgrades the node to the given version."""
+        self.teardown()
+        self.version = version
+        self.setup()
 
     def run(self, *command):
         """Runs the given command in the container."""
