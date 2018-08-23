@@ -378,9 +378,8 @@ class Node(object):
             'cpus': None,
             'memory': None,
             'profiler': False,
-            'log_level': 'trace',
-            'console_log_level': 'info',
-            'file_log_level': 'info'
+            'debug': False,
+            'trace': False
         }
 
         def kwarg(name):
@@ -465,19 +464,18 @@ class Node(object):
         if kwarg('profiler'):
             ports[10001] = self._find_open_port()
 
-        # Function for determining whether one log level is greater than another
-        log_levels = ('trace', 'debug', 'info', 'warn', 'error')
-        def find_index(level):
-            for i in range(len(log_levels)):
-                if log_levels[i] == level:
-                    return i
+        environment = {
+            'ATOMIX_LOG': '/data/log',
+            'CLUSTER_ID': self.cluster.name,
+            'NODE_ID': self.name,
+            'NODE_ADDRESS': self.address,
+            'DATA_DIR': '/data'
+        }
 
-        # Set the base log level to the highest level
-        log_level, console_log_level, file_log_level = kwarg('log_level'), kwarg('console_log_level'), kwarg('file_log_level')
-        if find_index(console_log_level) < find_index(log_level):
-            log_level = console_log_level
-        if find_index(file_log_level) < find_index(log_level):
-            log_level = file_log_level
+        if kwarg('trace'):
+            environment['ATOMIX_TRACE'] = 'true'
+        elif kwarg('debug'):
+            environment['ATOMIX_DEBUG'] = 'true'
 
         logger.info("Running container %s", self.name)
         self._docker_client.containers.run(
@@ -499,16 +497,7 @@ class Node(object):
             volumes={self.path: {'bind': '/data', 'mode': 'rw'}},
             cpuset_cpus=kwarg('cpus'),
             mem_limit=kwarg('memory'),
-            environment={
-                'profile': 'true' if kwarg('profiler') else 'false',
-                'log_level': log_level.upper(),
-                'console_log_level': console_log_level.upper(),
-                'file_log_level': file_log_level.upper(),
-                'CLUSTER_ID': self.cluster.name,
-                'NODE_ID': self.name,
-                'NODE_ADDRESS': self.address,
-                'DATA_DIR': '/data'
-            })
+            environment=environment)
         self.client = TestClient(port=self.local_port)
         return self
 

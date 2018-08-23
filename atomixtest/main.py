@@ -16,9 +16,8 @@ def setup(args):
         cpus=args.cpu,
         memory=args.memory_limit,
         profiler=args.profiler,
-        log_level=args.log_level,
-        console_log_level=args.console_level,
-        file_log_level=args.file_level
+        debug=args.debug,
+        trace=args.trace
     )
 
 def teardown(args):
@@ -168,16 +167,15 @@ def _create_parser():
     cluster_subparsers = cluster_parser.add_subparsers(dest='action', help="The action to execute")
 
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
-    setup_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the cluster")
-    setup_parser.add_argument('-n', '--nodes', type=int, default=3, help="The number of nodes in the cluster")
-    setup_parser.add_argument('-v', '--version', type=str, default='latest', help="The version to setup")
+    setup_parser.add_argument('--config', '-c', nargs='+', help="The configuration(s) to apply to the cluster")
+    setup_parser.add_argument('--nodes', '-n', type=int, default=3, help="The number of nodes in the cluster")
+    setup_parser.add_argument('--version', '-v', type=str, default='latest', help="The version to setup")
     setup_parser.add_argument('--subnet', help="The subnet in which to create the cluster")
     setup_parser.add_argument('--gateway', help="The IPv4 gateway for the master subnet")
     setup_parser.add_argument('--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
     setup_parser.add_argument('--memory-limit', help="The per-container memory limit")
-    setup_parser.add_argument('--log-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The log level with which to run Atomix")
-    setup_parser.add_argument('--console-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The console log level with which to run Atomix")
-    setup_parser.add_argument('--file-level', choices=['trace', 'debug', 'info', 'warn', 'error'], default='info', help="The file log level with which to run Atomix")
+    setup_parser.add_argument('--debug', '-d', action='store_true', default=False, help="Enable debug logging")
+    setup_parser.add_argument('--trace', '-t', action='store_true', default=False, help="Enable trace logging")
     setup_parser.add_argument('--profiler', choices=['yourkit'], help="Enable profiling")
     setup_parser.set_defaults(func=setup)
 
