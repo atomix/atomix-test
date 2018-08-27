@@ -682,6 +682,14 @@ def get_clusters(process_id=None):
     return [Cluster(name) for name in clusters]
 
 
+def get_configs():
+    """Returns a list of available configurations."""
+    for filename in os.listdir(os.path.join(os.path.dirname(__file__), '../config')):
+        name, extension = os.path.splitext(filename)
+        if extension == '.conf':
+            yield name
+
+
 def _find_env(envs, name):
     prefix = name + '='
     for env in envs:
