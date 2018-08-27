@@ -51,7 +51,8 @@ class Cluster(object):
         if isinstance(id, int):
             return self.nodes()[id-1]
         else:
-            return [node for node in self.nodes() if node.name == id].pop()
+            nodes = [node for node in self.nodes() if node.name == id]
+            return nodes.pop() if len(nodes) > 0 else None
 
     def nodes(self, bootstrap=False):
         """Returns a list of nodes in the cluster."""
