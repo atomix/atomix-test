@@ -12,7 +12,7 @@ def _create_table(data):
 
 def clusters_to_str(clusters):
     """Returns a string table for the given clusters."""
-    data = [['NAME', 'NODES', 'PATH', 'NETWORK', 'SUBNET', 'GATEWAY', 'CPUS', 'MEMORY', 'profiler'],]
+    data = [['NAME', 'NODES', 'PATH', 'NETWORK', 'SUBNET', 'GATEWAY'],]
     for cluster in clusters:
         data.append([
             cluster.name,
@@ -20,10 +20,7 @@ def clusters_to_str(clusters):
             cluster.path,
             cluster.network.name,
             cluster.network.subnet,
-            cluster.network.gateway,
-            cluster.cpus,
-            cluster.memory,
-            cluster.profiler
+            cluster.network.gateway
         ])
     return _create_table(data)
 

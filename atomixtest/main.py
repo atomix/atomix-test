@@ -37,6 +37,9 @@ def cleanup(args):
         if os.path.exists(path):
             shutil.rmtree(path)
 
+def upgrade(args):
+    get_cluster(args.name).upgrade(version=args.version)
+
 def add_node(args):
     get_cluster(args.name).add_node(*args.config, version=args.version)
 
@@ -186,6 +189,10 @@ def _create_parser():
     cleanup_parser = cluster_subparsers.add_parser('cleanup', help="Cleans up all test clusters")
     cleanup_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
     cleanup_parser.set_defaults(func=cleanup)
+
+    upgrade_parser = cluster_subparsers.add_parser('upgrade', help="Upgrades a test cluster")
+    upgrade_parser.add_argument('--version', '-v', type=str, default='latest', help="The version to which to upgrade")
+    upgrade_parser.set_defaults(func=upgrade)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
     add_node_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the node")

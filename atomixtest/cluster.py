@@ -118,6 +118,11 @@ class Cluster(object):
         self.wait_for_start()
         return self
 
+    def upgrade(self, version='latest'):
+        """Upgrades the cluster to the given version."""
+        for node in self.nodes():
+            self.upgrade_node(node.name, version)
+
     def add_node(self, *args, **kwargs):
         """Adds a new node to the cluster."""
         logger.info("Adding a node to the cluster")
