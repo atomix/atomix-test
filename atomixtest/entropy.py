@@ -36,8 +36,7 @@ def run(
         processes=8,
         scale=1000,
         prime=0,
-        operation_count=0,
-        operation_delay=(1, 5),
+        ops=1,
         run_time='1m',
         functions=(),
         function_delay=(15, 30)
@@ -53,8 +52,8 @@ def run(
     # Create a history object with which to track history
     history = History()
     controller = Controller(cluster, functions, function_delay, history)
-    primer = Primer(0, name, operation_count, operation_delay, scale, history, cluster, prime)
-    processes = [Process(i+1, name, operation_count, operation_delay, scale, history, _parse_time(run_time), random.choice(cluster.nodes())) for i in range(processes)]
+    primer = Primer(name, scale, history, cluster, prime)
+    processes = [Process(i+1, name, scale, history, ops, _parse_time(run_time), random.choice(cluster.nodes())) for i in range(processes)]
 
     # Start the test.
     _start_test(primer, controller, processes)
@@ -206,12 +205,10 @@ class Runnable(object):
 
 class Operator(Runnable):
     """Base class for runnables that operate on the cluster state."""
-    def __init__(self, id, name, operation_count, delay, scale, history):
+    def __init__(self, id, name, scale, history):
         super(Operator, self).__init__()
         self.id = id
         self.name = name
-        self.operation_count = operation_count
-        self.delay = delay
         self._keys = [str(uuid.uuid4()) for _ in range(scale)]
         self.history = history
         self.operations = tuple()
@@ -258,8 +255,8 @@ class Operator(Runnable):
 
 
 class Primer(Operator):
-    def __init__(self, id, name, operation_count, delay, scale, history, cluster, prime=0):
-        super(Primer, self).__init__(id, name, operation_count, delay, scale, history)
+    def __init__(self, name, scale, history, cluster, prime=0):
+        super(Primer, self).__init__('primer', name, scale, history)
         self.cluster = cluster
         self.prime = prime
 
@@ -290,38 +287,43 @@ class Process(Operator):
     performed by the process will be logged in the History object provided to the constructor. The process runs for a
     predefined number of operations or until an operation fails with an unknown error (e.g. a timeout).
     """
-    def __init__(self, id, name, operation_count, delay, scale, history, run_time, node):
-        super(Process, self).__init__(id, name, operation_count, delay, scale, history)
+    def __init__(self, id, name, scale, history, ops, run_time, node):
+        super(Process, self).__init__(id, name, scale, history)
         self.run_time = run_time
         self.node = node
         self.operations = (self.read, self.write, self.delete)
         self.start_time = None
+        self.ops = ops
+        self._op = 0
+        self._remaining = 1.0
 
     def run(self):
         """Runs the process."""
         self.start_time = time.time()
-        for _ in range(self.operation_count):
-            self._wait()
-            self._run()
-            self._check_time()
-            if not self.running:
-                break
         while True:
             self._wait()
-            if self.operation_count <= 0:
-                self._run()
-            self._check_time()
+            self._run()
+            self._check_stop()
             if not self.running:
                 break
 
-    def _check_time(self):
+    def _check_stop(self):
         """Checks whether the run time has completed."""
         if time.time() - self.start_time > self.run_time:
             self.stop()
 
     def _wait(self):
         """Blocks for a uniform random delay according to the process configuration."""
-        time.sleep(random.uniform(self.delay[0], self.delay[1]))
+        self._op += 1
+        if self._op < self.ops:
+            sleep = random.uniform(0, self._remaining / 2)
+            self._remaining -= sleep
+            time.sleep(sleep)
+        else:
+            sleep = self._remaining
+            self._op = 0
+            self._remaining = 1.0
+            time.sleep(sleep)
 
     def read(self):
         """Executes a read operation."""

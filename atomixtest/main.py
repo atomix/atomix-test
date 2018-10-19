@@ -176,8 +176,7 @@ def entropy_test(args):
         processes=args.parallelism,
         scale=args.scale,
         prime=args.prime,
-        operation_count=args.operation_count,
-        operation_delay=args.operation_delay,
+        ops=args.ops,
         run_time=args.run_time,
         functions=functions,
         function_delay=args.function_delay
@@ -411,19 +410,11 @@ def _create_parser():
         help="Number of operations with which to prime the cluster"
     )
     entropy_parser.add_argument(
-        '--operation-count',
+        '--ops',
         type=int,
-        default=0,
+        default=1,
         metavar='COUNT',
-        help="Number of operations to execute per process. Defaults to 50 operations per process"
-    )
-    entropy_parser.add_argument(
-        '--operation-delay',
-        type=int,
-        nargs=2,
-        default=[1, 5],
-        metavar='SECONDS',
-        help="Uniform random delay to wait between operations. Defaults to 1-5 seconds per operation"
+        help="Number of operations to execute per second"
     )
     entropy_parser.add_argument(
         '-t',
