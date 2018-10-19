@@ -2,9 +2,11 @@ from cluster import get_cluster, get_clusters, Cluster
 from network import get_networks
 from utils import clusters_to_str, cluster_to_str
 from errors import TestError
+import re
 import sys
 import os
 import shutil
+from datetime import timedelta
 
 def setup(args):
     Cluster(args.name).setup(
@@ -194,10 +196,21 @@ def _create_parser():
             return float(value[:-1]) / 100
         return float(value)
 
-    def milliseconds(value):
-        if value.lower().endswith('ms'):
-            return int(value[:-2])
-        return int(value)
+    def milliseconds(time):
+        regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m(?!s))?((?P<seconds>\d+?)s)?((?P<milliseconds>\d+?)ms)?')
+        parts = regex.match(time.lower())
+        if not parts:
+            return int(time)
+        parts = parts.groupdict()
+        time_params = {}
+        for (name, param) in parts.iteritems():
+            if param:
+                time_params[name] = int(param)
+        return int(timedelta(**time_params).total_seconds() * 1000)
+
+    def seconds(time):
+        millis = milliseconds(time)
+        return millis / 1000.0
 
     def name_or_id(value):
         try:
@@ -307,8 +320,8 @@ def _create_parser():
 
     delay_parser = cluster_subparsers.add_parser('delay', help="Delay packets to a node")
     delay_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to disrupt")
-    delay_parser.add_argument('-l', '--latency', default='50ms', type=milliseconds, help="The latency in milliseconds")
-    delay_parser.add_argument('-j', '--jitter', default='10ms', type=milliseconds, help="The jitter in milliseconds")
+    delay_parser.add_argument('-l', '--latency', default='50ms', type=milliseconds, metavar='DELTA', help="The latency in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]")
+    delay_parser.add_argument('-j', '--jitter', default='10ms', type=milliseconds, metavar='DELTA', help="The jitter in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]")
     delay_parser.add_argument('-c', '--correlation', default='75%', type=percentage, help="The correlation")
     delay_parser.add_argument('-d', '--distribution', default='normal', choices=['normal', 'pareto', 'paretonormal'], help="The distribution")
     delay_parser.set_defaults(func=delay)
@@ -419,10 +432,10 @@ def _create_parser():
     entropy_parser.add_argument(
         '-t',
         '--run-time',
-        type=str,
+        type=seconds,
         default='1m',
-        metavar='TIME',
-        help="The amount of time for which to run the test"
+        metavar='DELTA',
+        help="The amount of time for which to run the test in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]"
     )
     entropy_parser.add_argument(
         '--partition-random',
@@ -451,18 +464,22 @@ def _create_parser():
     entropy_parser.add_argument(
         '--delay',
         nargs='?',
-        type=str,
+        type=milliseconds,
         const='100ms',
         metavar='DELAY',
-        help="Enables a function that injects network latency on all nodes in the network"
+        help="""Enables a function that injects network latency on all nodes in the network,
+        optionally including the delay period in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
+        """
     )
     entropy_parser.add_argument(
         '--delay-random',
         nargs='?',
-        type=str,
+        type=milliseconds,
         const='100ms',
         metavar='DELAY',
-        help="Enables a function that injects network latency on a random node in the network"
+        help="""Enables a function that injects network latency on a random node in the network,
+        optionally including the delay period in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
+        """
     )
     entropy_parser.add_argument(
         '--restart',
@@ -475,7 +492,7 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes CPU on all the nodes in the cluster"
     )
     entropy_parser.add_argument(
@@ -483,7 +500,7 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes CPU on a random node in the cluster"
     )
     entropy_parser.add_argument(
@@ -491,7 +508,7 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes I/O on all the nodes in the cluster"
     )
     entropy_parser.add_argument(
@@ -499,7 +516,7 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes I/O on a random node in the cluster"
     )
     entropy_parser.add_argument(
@@ -507,7 +524,7 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes memory on all the nodes in the cluster"
     )
     entropy_parser.add_argument(
@@ -515,16 +532,18 @@ def _create_parser():
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='NUM',
         help="Enables a function that consumes memory on a random node in the cluster"
     )
     entropy_parser.add_argument(
         '--function-delay',
-        type=int,
+        type=seconds,
         nargs=2,
         default=[15, 30],
-        metavar='SECONDS',
-        help="Uniform random delay to wait between entropy functions. Defaults to 15-30 seconds between functions"
+        metavar='DELTA',
+        help="""Uniform random delay to wait between entropy functions. Defaults to 15s-30s between functions
+        The delay period is specified in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
+        """
     )
     entropy_parser.set_defaults(func=entropy_test)
 

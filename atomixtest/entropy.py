@@ -15,19 +15,6 @@ def _generate_test_name():
     """Generates a unique test name."""
     return "entropy-test-" + str(uuid.uuid4())
 
-
-def _parse_time(run_time):
-    regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?((?P<milliseconds>\d+?)ms)?')
-    parts = regex.match(run_time.lower())
-    if not parts:
-        return
-    parts = parts.groupdict()
-    time_params = {}
-    for (name, param) in parts.iteritems():
-        if param:
-            time_params[name] = int(param)
-    return timedelta(**time_params).total_seconds()
-
 def run(
         name=None,
         nodes=3,
@@ -37,11 +24,11 @@ def run(
         scale=1000,
         prime=0,
         ops=1,
-        run_time='1m',
+        run_time=60,
         functions=(),
         function_delay=(15, 30)
 ):
-    """Runs the linearizability test."""
+    """Runs the entropy test."""
 
     if name is None:
         name = _generate_test_name()
@@ -53,7 +40,7 @@ def run(
     history = History()
     controller = Controller(cluster, functions, function_delay, history)
     primer = Primer(name, scale, history, cluster, prime)
-    processes = [Process(i+1, name, scale, history, ops, _parse_time(run_time), random.choice(cluster.nodes())) for i in range(processes)]
+    processes = [Process(i+1, name, scale, history, ops, run_time, random.choice(cluster.nodes())) for i in range(processes)]
 
     # Start the test.
     _start_test(primer, controller, processes)
@@ -363,10 +350,10 @@ class Controller(Runnable):
     will run at any given time and the previous disruptor will be healed prior to the next disruptor beginning.
     The disruptor sleeps for a uniform random interval between disruptor functions.
     """
-    def __init__(self, cluster, functions, delay, history):
+    def __init__(self, cluster, functions, function_delay, history):
         super(Controller, self).__init__()
         self.cluster = cluster
-        self.delay = delay
+        self.function_delay = function_delay
         self.history = history
         self.functions = []
         for func in functions:
@@ -390,7 +377,7 @@ class Controller(Runnable):
 
     def _wait(self):
         """Waits for a uniform random delay."""
-        time.sleep(random.uniform(self.delay[0], self.delay[1]))
+        time.sleep(random.uniform(self.function_delay[0], self.function_delay[1]))
 
     def _random_node(self):
         """Returns a random node on which to perform an operation."""
