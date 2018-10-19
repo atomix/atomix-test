@@ -271,6 +271,7 @@ class TestClient(AtomixClient):
             return super(TestClient, self).get(path, headers, *args, **kwargs)
         except:
             logger.error('GET {}'.format(path.format(*args, **kwargs)))
+            raise
 
     def post(self, path, data=None, headers=None, *args, **kwargs):
         logger.debug('POST {}'.format(path.format(*args, **kwargs)))
@@ -278,6 +279,7 @@ class TestClient(AtomixClient):
             return super(TestClient, self).post(path, data, headers, *args, **kwargs)
         except:
             logger.error('POST {}'.format(path.format(*args, **kwargs)))
+            raise
 
     def put(self, path, data=None, headers=None, *args, **kwargs):
         logger.debug('PUT {}'.format(path.format(*args, **kwargs)))
@@ -285,6 +287,7 @@ class TestClient(AtomixClient):
             return super(TestClient, self).put(path, data, headers, *args, **kwargs)
         except:
             logger.error('PUT {}'.format(path.format(*args, **kwargs)))
+            raise
 
     def delete(self, path, headers=None, *args, **kwargs):
         logger.debug('DELETE {}'.format(path.format(*args, **kwargs)))
@@ -292,6 +295,7 @@ class TestClient(AtomixClient):
             return super(TestClient, self).delete(path, headers, *args, **kwargs)
         except:
             logger.error('DELETE {}'.format(path.format(*args, **kwargs)))
+            raise
 
 
 class Node(object):

@@ -117,7 +117,15 @@ class History(object):
     def record(self, entry):
         """Records an entry in the history."""
         self.entries.append(entry)
-        logger.info('{} {} {} ({})'.format(entry.process, entry.action, entry.operation, ', '.join([str(value) for value in entry.values])))
+        message = '{} {} {} ({})'.format(entry.process, entry.action, entry.operation, ', '.join([str(value) for value in entry.values]))
+        if entry.action == 'invoke':
+            logger.warn(message)
+        elif entry.action == 'ok':
+            logger.debug(message)
+        elif entry.action == 'fail':
+            logger.error(message)
+        elif entry.action == 'info':
+            logger.info(message)
 
     def count(self, action):
         """Returns the number of entries for the given action."""
