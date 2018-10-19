@@ -266,32 +266,32 @@ class TestClient(AtomixClient):
         super(TestClient, self).__init__(host, port)
 
     def get(self, path, headers=None, *args, **kwargs):
-        logger.debug('GET {}'.format(path))
+        logger.debug('GET {}'.format(path.format(*args, **kwargs)))
         try:
             return super(TestClient, self).get(path, headers, *args, **kwargs)
         except:
-            logger.error('GET {}'.format(path))
+            logger.error('GET {}'.format(path.format(*args, **kwargs)))
 
     def post(self, path, data=None, headers=None, *args, **kwargs):
-        logger.debug('POST {}'.format(path))
+        logger.debug('POST {}'.format(path.format(*args, **kwargs)))
         try:
             return super(TestClient, self).post(path, data, headers, *args, **kwargs)
         except:
-            logger.error('POST {}'.format(path))
+            logger.error('POST {}'.format(path.format(*args, **kwargs)))
 
     def put(self, path, data=None, headers=None, *args, **kwargs):
-        logger.debug('PUT {}'.format(path))
+        logger.debug('PUT {}'.format(path.format(*args, **kwargs)))
         try:
             return super(TestClient, self).put(path, data, headers, *args, **kwargs)
         except:
-            logger.error('PUT {}'.format(path))
+            logger.error('PUT {}'.format(path.format(*args, **kwargs)))
 
     def delete(self, path, headers=None, *args, **kwargs):
-        logger.debug('DELETE {}'.format(path))
+        logger.debug('DELETE {}'.format(path.format(*args, **kwargs)))
         try:
             return super(TestClient, self).delete(path, headers, *args, **kwargs)
         except:
-            logger.error('DELETE {}'.format(path))
+            logger.error('DELETE {}'.format(path.format(*args, **kwargs)))
 
 
 class Node(object):
@@ -471,17 +471,25 @@ class Node(object):
             ports[10001] = self._find_open_port()
 
         environment = {
-            'ATOMIX_LOG': '/data/log',
             'CLUSTER_ID': self.cluster.name,
             'NODE_ID': self.name,
             'NODE_ADDRESS': self.address,
             'DATA_DIR': '/data'
         }
 
+        args.append('--log-dir')
+        args.append('/data/log')
         if kwarg('trace'):
-            environment['ATOMIX_TRACE'] = 'true'
+            args.append('--log-level')
+            args.append('TRACE')
+            args.append('--file-log-level')
+            args.append('TRACE')
         elif kwarg('debug'):
-            environment['ATOMIX_DEBUG'] = 'true'
+            args.append('--log-level')
+            args.append('DEBUG')
+            args.append('--file-log-level')
+            args.append('DEBUG')
+        args.append('--ignore-resources')
 
         logger.info("Running container %s", self.name)
         self._docker_client.containers.run(
@@ -650,6 +658,9 @@ class Node(object):
     def wait_for_stop(self):
         """Waits for the node to exit."""
         self.docker_container.wait()
+
+    def __str__(self):
+        return self.name
 
     def __eq__(self, other):
         return isinstance(other, Node) and self.name == other.name

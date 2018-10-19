@@ -138,6 +138,51 @@ def stress(args):
 def destress(args):
     get_cluster(args.name).destress(args.node)
 
+def entropy_test(args):
+    from entropy import run
+
+    functions = []
+    if args.partition_random:
+        functions.append(('partition_random',))
+    if args.partition_halves:
+        functions.append(('partition_halves',))
+    if args.partition_bridge:
+        functions.append(('partition_bridge',))
+    if args.crash_random:
+        functions.append(('crash_random',))
+    if args.delay is not None:
+        functions.append(('delay', args.delay))
+    if args.delay_random is not None:
+        functions.append(('delay_random', args.delay_random))
+    if args.restart:
+        functions.append(('restart',))
+    if args.stress_cpu is not None:
+        functions.append(('stress_cpu', args.stress_cpu))
+    if args.stress_cpu_random is not None:
+        functions.append(('stress_cpu_random', args.stress_cpu_random))
+    if args.stress_io is not None:
+        functions.append(('stress_io', args.stress_io))
+    if args.stress_io_random is not None:
+        functions.append(('stress_io_random', args.stress_io_random))
+    if args.stress_memory is not None:
+        functions.append(('stress_memory', args.stress_memory))
+    if args.stress_memory_random is not None:
+        functions.append(('stress_memory_random', args.stress_memory_random))
+
+    sys.exit(run(
+        nodes=args.nodes,
+        configs=args.config,
+        version=args.version,
+        processes=args.parallelism,
+        scale=args.scale,
+        prime=args.prime,
+        operation_count=args.operation_count,
+        operation_delay=args.operation_delay,
+        run_time=args.run_time,
+        functions=functions,
+        function_delay=args.function_delay
+    ))
+
 def run(args):
     from test import run
     sys.exit(run(args.paths, fail_fast=args.fail_fast))
@@ -318,6 +363,179 @@ def _create_parser():
     logs_parser.add_argument('node', type=name_or_id, help="The node for which to retrieve logs")
     logs_parser.add_argument('-s', '--stream', action='store_true', default=False, help="Whether to stream the logs")
     logs_parser.set_defaults(func=logs)
+
+    entropy_parser = subparsers.add_parser('entropy', help="Run an entropy test")
+    entropy_parser.add_argument(
+        '--nodes',
+        '-n',
+        type=int,
+        default=3,
+        metavar='NUM',
+        help="The number of nodes in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--config',
+        '-c',
+        nargs='+',
+        metavar='FILE',
+        help="The configuration(s) to apply to the cluster"
+    )
+    entropy_parser.add_argument(
+        '--version',
+        '-v',
+        type=str,
+        default='latest',
+        help="The version to setup"
+    )
+    entropy_parser.add_argument(
+        '-p',
+        '--parallelism',
+        type=int,
+        default=8,
+        metavar='COUNT',
+        help="Number of parallel processes with which to test. Defaults to 8"
+    )
+    entropy_parser.add_argument(
+        '-s',
+        '--scale',
+        type=int,
+        default=1000,
+        metavar='COUNT',
+        help="Number of unique keys to write to the cluster"
+    )
+    entropy_parser.add_argument(
+        '--prime',
+        type=int,
+        default=0,
+        metavar='COUNT',
+        help="Number of operations with which to prime the cluster"
+    )
+    entropy_parser.add_argument(
+        '--operation-count',
+        type=int,
+        default=0,
+        metavar='COUNT',
+        help="Number of operations to execute per process. Defaults to 50 operations per process"
+    )
+    entropy_parser.add_argument(
+        '--operation-delay',
+        type=int,
+        nargs=2,
+        default=[1, 5],
+        metavar='SECONDS',
+        help="Uniform random delay to wait between operations. Defaults to 1-5 seconds per operation"
+    )
+    entropy_parser.add_argument(
+        '-t',
+        '--run-time',
+        type=str,
+        default='1m',
+        metavar='TIME',
+        help="The amount of time for which to run the test"
+    )
+    entropy_parser.add_argument(
+        '--partition-random',
+        action='store_true',
+        default=False,
+        help="Enables a function that partitions a random set of nodes"
+    )
+    entropy_parser.add_argument(
+        '--partition-halves',
+        action='store_true',
+        default=False,
+        help="Enables a function that partitions the cluster into two halves"
+    )
+    entropy_parser.add_argument(
+        '--partition-bridge',
+        action='store_true',
+        default=False,
+        help="Enables a function that partitions the cluster into two halves with a single node bridging the halves"
+    )
+    entropy_parser.add_argument(
+        '--crash-random',
+        action='store_true',
+        default=False,
+        help="Enables a function that crashes a random node"
+    )
+    entropy_parser.add_argument(
+        '--delay',
+        nargs='?',
+        type=str,
+        const='100ms',
+        metavar='DELAY',
+        help="Enables a function that injects network latency on all nodes in the network"
+    )
+    entropy_parser.add_argument(
+        '--delay-random',
+        nargs='?',
+        type=str,
+        const='100ms',
+        metavar='DELAY',
+        help="Enables a function that injects network latency on a random node in the network"
+    )
+    entropy_parser.add_argument(
+        '--restart',
+        action='store_true',
+        default=False,
+        help="Enables a function that restarts all the nodes in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-cpu',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes CPU on all the nodes in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-cpu-random',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes CPU on a random node in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-io',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes I/O on all the nodes in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-io-random',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes I/O on a random node in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-memory',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes memory on all the nodes in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--stress-memory-random',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Enables a function that consumes memory on a random node in the cluster"
+    )
+    entropy_parser.add_argument(
+        '--function-delay',
+        type=int,
+        nargs=2,
+        default=[15, 30],
+        metavar='SECONDS',
+        help="Uniform random delay to wait between entropy functions. Defaults to 15-30 seconds between functions"
+    )
+    entropy_parser.set_defaults(func=entropy_test)
 
     run_parser = subparsers.add_parser('run', help="Run a test")
     run_parser.add_argument('paths', nargs='+', help="The modules or packages containing the test(s) to run")
