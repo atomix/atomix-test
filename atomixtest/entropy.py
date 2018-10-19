@@ -69,7 +69,7 @@ def run(
 def _init_test_cluster(name, nodes=3, configs=(), version='latest'):
     """Initializes a test cluster."""
     cluster = Cluster(name)
-    cluster.setup(*configs, nodes=nodes, version=version)
+    cluster.setup(*configs, nodes=nodes, version=version, trace=True)
     return cluster
 
 
@@ -206,11 +206,15 @@ class Operator(Runnable):
         self.delay = delay
         self._keys = [str(uuid.uuid4()) for _ in range(scale)]
         self.history = history
-        self.operations = (self.read, self.write, self.delete)
+        self.operations = tuple()
 
     def _run(self):
         """Runs a random operation."""
         return random.choice(self.operations)()
+
+    def _random_node(self):
+        """Returns a random node on which to perform an operation."""
+        return random.choice(self.cluster.nodes())
 
     def _random_key(self):
         """Returns a random key to get or set."""
@@ -244,45 +248,12 @@ class Operator(Runnable):
         self.stop()
         return False
 
-    def read(self):
-        """Executes a read operation."""
-        key = self._random_key()
-        self._invoke('read', key)
-        try:
-            return self._ok('read', key, self.node.map(self.name).get(key))
-        except:
-            return self._info('read', key)
-
-    def write(self):
-        """Executes a write operation."""
-        key, value = self._random_key(), self._random_value()
-        self._invoke('write', key, value)
-        try:
-            self.node.map(self.name).put(key, value)
-            return self._ok('write', key, value)
-        except:
-            return self._info('write', key, value)
-
-    def delete(self):
-        """Executes a delete operation."""
-        key = self._random_key()
-        self._invoke('delete', key)
-        try:
-            self.node.map(self.name).remove(key)
-            return self._ok('delete', key)
-        except:
-            return self._info('delete', key)
-
 
 class Primer(Operator):
     def __init__(self, id, name, operation_count, delay, scale, history, cluster, prime=0):
         super(Primer, self).__init__(id, name, operation_count, delay, scale, history)
         self.cluster = cluster
         self.prime = prime
-
-    def _random_node(self):
-        """Returns a random node on which to perform an operation."""
-        return random.choice(self.cluster.nodes())
 
     def _invoke(self, operation, *values):
         """Logs an operation invocation event in the process history."""
@@ -300,7 +271,7 @@ class Primer(Operator):
         self._info('prime', self.prime)
         for i in range(self.prime):
             key, value = self._random_key(), self._random_value()
-            self.node.map(self.name).put(key, value)
+            self._random_node().map(self.name).put(key, value)
 
 
 class Process(Operator):
@@ -313,14 +284,8 @@ class Process(Operator):
     """
     def __init__(self, id, name, operation_count, delay, scale, history, run_time, node):
         super(Process, self).__init__(id, name, operation_count, delay, scale, history)
-        self.id = id
-        self.name = name
-        self.operation_count = operation_count
-        self.delay = delay
-        self._keys = [str(uuid.uuid4()) for _ in range(scale)]
         self.run_time = run_time
         self.node = node
-        self.history = history
         self.operations = (self.read, self.write, self.delete)
         self.start_time = None
 
@@ -349,6 +314,35 @@ class Process(Operator):
     def _wait(self):
         """Blocks for a uniform random delay according to the process configuration."""
         time.sleep(random.uniform(self.delay[0], self.delay[1]))
+
+    def read(self):
+        """Executes a read operation."""
+        key = self._random_key()
+        self._invoke('read', key)
+        try:
+            return self._ok('read', key, self.node.map(self.name).get(key))
+        except:
+            return self._info('read', key)
+
+    def write(self):
+        """Executes a write operation."""
+        key, value = self._random_key(), self._random_value()
+        self._invoke('write', key, value)
+        try:
+            self.node.map(self.name).put(key, value)
+            return self._ok('write', key, value)
+        except:
+            return self._info('write', key, value)
+
+    def delete(self):
+        """Executes a delete operation."""
+        key = self._random_key()
+        self._invoke('delete', key)
+        try:
+            self.node.map(self.name).remove(key)
+            return self._ok('delete', key)
+        except:
+            return self._info('delete', key)
 
 
 class Controller(Runnable):
