@@ -278,7 +278,7 @@ def _create_parser():
     subparsers = parser.add_subparsers()
 
     cluster_parser = subparsers.add_parser('cluster', help="Cluster commands")
-    cluster_parser.add_argument('-i', '--name', required=False, default='test', help="The cluster on which to operate")
+    cluster_parser.add_argument('name', nargs='?', default='test', help="The cluster on which to operate")
 
     cluster_subparsers = cluster_parser.add_subparsers(dest='action', help="The action to execute")
 
