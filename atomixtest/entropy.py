@@ -1,15 +1,16 @@
-from cluster import Cluster
+from atomix import AtomixClient
+import json
 import random
-import uuid
-import re
 import sys
 import threading
 import time
-import json
-from logging import logger
-from datetime import timedelta
-from collections import OrderedDict
+import uuid
 from abc import ABCMeta, abstractmethod
+from collections import OrderedDict
+
+from cluster import Cluster, Node
+from logging import logger
+
 
 def _generate_test_name():
     """Generates a unique test name."""
@@ -20,6 +21,7 @@ def run(
         nodes=3,
         configs=(),
         version='latest',
+        dry_run=False,
         processes=8,
         scale=1000,
         prime=0,
@@ -34,7 +36,7 @@ def run(
         name = _generate_test_name()
 
     # Initialize the test cluster.
-    cluster = _init_test_cluster(name, nodes, configs, version)
+    cluster = _init_test_cluster(name, nodes, configs, version, dry_run)
 
     # Create a history object with which to track history
     history = History()
@@ -53,8 +55,67 @@ def run(
     _teardown_test_cluster(cluster, history)
 
 
-def _init_test_cluster(name, nodes=3, configs=(), version='latest'):
+class DryCluster(object):
+    def __init__(self, name, version, nodes):
+        self.name = name
+        self._nodes = [DryNode(name + str(i+1), name + str(i+1), self, version, True) for i in range(nodes)]
+
+    def nodes(self):
+        return self._nodes
+
+    def __getattr__(self, name):
+        try:
+            return super(DryCluster, self).__getattr__(name)
+        except AttributeError:
+            return lambda *args, **kwargs: None
+
+
+class DryNode(object):
+    def __init__(self, name, ip, cluster, version, bootstrap):
+        self.name = name
+        self.ip = ip
+        self.version = version
+        self.bootstrap = bootstrap
+        self.http_port = 5678
+        self.tcp_port = 5679
+        self.cluster = cluster
+        self.client = DryClient(port=self.http_port)
+
+    def __getattr__(self, name):
+        try:
+            return super(DryNode, self).__getattr__(name)
+        except AttributeError:
+            try:
+                return getattr(self.client, name)
+            except AttributeError:
+                return lambda *args, **kwargs: None
+
+    def __str__(self):
+        return self.name
+
+
+class DryClient(AtomixClient):
+    """Atomix test client."""
+    def __init__(self, host='127.0.0.1', port=5678):
+        super(DryClient, self).__init__(host, port)
+
+    def get(self, path, headers=None, *args, **kwargs):
+        logger.debug('GET {}'.format(path.format(*args, **kwargs)))
+
+    def post(self, path, data=None, headers=None, *args, **kwargs):
+        logger.debug('POST {}'.format(path.format(*args, **kwargs)))
+
+    def put(self, path, data=None, headers=None, *args, **kwargs):
+        logger.debug('PUT {}'.format(path.format(*args, **kwargs)))
+
+    def delete(self, path, headers=None, *args, **kwargs):
+        logger.debug('DELETE {}'.format(path.format(*args, **kwargs)))
+
+
+def _init_test_cluster(name, nodes=3, configs=(), version='latest', dry_run=False):
     """Initializes a test cluster."""
+    if dry_run:
+        return DryCluster(name, version, nodes)
     cluster = Cluster(name)
     cluster.setup(*configs, nodes=nodes, version=version, trace=True)
     return cluster
@@ -369,19 +430,25 @@ class Controller(Runnable):
 
     def run(self):
         """Runs the controller until stopped."""
-        while self.running:
-            self._wait()
-            if self.running:
-                self._run()
+        if len(self.functions) > 0:
+            while self.running:
+                self._wait()
+                if self.running:
+                    self._run()
 
     def _run(self):
         """Runs a random function."""
         function, args = random.choice(self.functions)
         function(*args)
 
-    def _wait(self):
+    def _wait(self, start=None, end=None):
         """Waits for a uniform random delay."""
-        time.sleep(random.uniform(self.function_delay[0], self.function_delay[1]))
+        if start is None:
+            time.sleep(random.uniform(self.function_delay[0], self.function_delay[1]))
+        elif end is None:
+            time.sleep(start)
+        else:
+            time.sleep(random.uniform(start, end))
 
     def _random_node(self):
         """Returns a random node on which to perform an operation."""
@@ -518,55 +585,55 @@ class Controller(Runnable):
         self._heal(node1, node2)
         self._stop("Fully connected")
 
-    def isolate_random(self):
+    def isolate_random(self, start=15, end=30):
         """Isolates a random node from all other nodes."""
         node = self._random_node()
         self._start("Isolate %s" % (node,))
         self._isolate(node)
-        self._wait()
+        self._wait(start, end)
         self._heal(node)
         self._stop("Fully connected")
 
-    def partition_halves(self):
+    def partition_halves(self, start=15, end=30):
         """Partitions the cluster into two halves."""
         self._start("Partitioning network into two halves")
         self._partition_halves()
-        self._wait()
+        self._wait(start, end)
         self._heal()
         self._stop("Fully connected")
 
-    def partition_bridge(self):
+    def partition_bridge(self, start=15, end=30):
         """Partitions the cluster into two halves with a bridge between them."""
         node = self._random_node()
         self._start("Partitioning network with bridge %s" % (node,))
         self._partition_bridge(node)
-        self._wait()
+        self._wait(start, end)
         self._heal()
         self._stop("Fully connected")
 
-    def crash_random(self):
+    def crash_random(self, start=15, end=30):
         """Crashes a random node."""
         node = self._random_node()
         self._start("Crashing %s" % (node,))
         self._crash(node)
-        self._wait()
+        self._wait(start, end)
         self._recover(node)
         self._stop("Recovered %s" % (node,))
 
-    def delay(self, latency=100):
+    def delay(self, latency=100, start=15, end=30):
         """Delays messages on all nodes."""
         self._start("Delay communication on all nodes")
         self._delay(latency=latency)
-        self._wait()
+        self._wait(start, end)
         self._restore()
         self._stop("Communication restored")
 
-    def delay_random(self, latency='100ms'):
+    def delay_random(self, latency=100, start=15, end=30):
         """Delays communication on a random node."""
         node = self._random_node()
         self._start("Delay communication on %s" % (node,))
-        self._delay(node, latency=_parse_time(latency))
-        self._wait()
+        self._delay(node, latency=latency)
+        self._wait(start, end)
         self._restore(node)
         self._stop("Communication restored on %s" % (node,))
 
@@ -578,47 +645,47 @@ class Controller(Runnable):
         self._startup()
         self._stop("Cluster restarted")
 
-    def stress_cpu(self, processes=1):
+    def stress_cpu(self, processes=1, start=15, end=30):
         self._start("Increase CPU usage on all nodes")
         self._stress_cpu(processes=processes)
-        self._wait()
+        self._wait(start, end)
         self._destress()
         self._stop("CPU usage reduced on all nodes")
 
-    def stress_io(self, processes=1):
+    def stress_io(self, processes=1, start=15, end=30):
         self._start("Increase I/O on all nodes")
         self._stress_io(processes=processes)
-        self._wait()
+        self._wait(start, end)
         self._destress()
         self._stop("I/O reduced on all nodes")
 
-    def stress_memory(self, processes=1):
+    def stress_memory(self, processes=1, start=15, end=30):
         self._start("Increase memory usage on all nodes")
         self._stress_memory(processes=processes)
-        self._wait()
+        self._wait(start, end)
         self._destress()
         self._stop("Memory usage reduced on all nodes")
 
-    def stress_cpu_random(self, processes=1):
+    def stress_cpu_random(self, processes=1, start=15, end=30):
         node = self._random_node()
         self._start("Increase CPU usage on %s" % (node,))
         self._stress_cpu(node, processes)
-        self._wait()
+        self._wait(start, end)
         self._destress(node)
         self._stop("CPU usage reduced on %s" % (node,))
 
-    def stress_io_random(self, processes=1):
+    def stress_io_random(self, processes=1, start=15, end=30):
         node = self._random_node()
         self._start("Increase I/O on %s" % (node,))
         self._stress_io(node, processes)
-        self._wait()
+        self._wait(start, end)
         self._destress(node)
         self._stop("I/O reduced on %s" % (node,))
 
-    def stress_memory_random(self, processes=1):
+    def stress_memory_random(self, processes=1, start=15, end=30):
         node = self._random_node()
         self._start("Increase memory usage on %s" % (node,))
         self._stress_memory(node, processes)
-        self._wait()
+        self._wait(start, end)
         self._destress(node)
         self._stop("Memory usage reduced on %s" % (node,))
