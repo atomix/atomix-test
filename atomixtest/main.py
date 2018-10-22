@@ -283,33 +283,107 @@ def _create_parser():
     cluster_subparsers = cluster_parser.add_subparsers(dest='action', help="The action to execute")
 
     setup_parser = cluster_subparsers.add_parser('setup', help="Setup a test cluster")
-    setup_parser.add_argument('--config', '-c', nargs='+', help="The configuration(s) to apply to the cluster")
-    setup_parser.add_argument('--nodes', '-n', type=int, default=3, help="The number of nodes in the cluster")
-    setup_parser.add_argument('--version', '-v', type=str, default='latest', help="The version to setup")
-    setup_parser.add_argument('--subnet', help="The subnet in which to create the cluster")
-    setup_parser.add_argument('--gateway', help="The IPv4 gateway for the master subnet")
-    setup_parser.add_argument('--cpu', help="CPUs in which to allow execution (0-3, 0,1)")
-    setup_parser.add_argument('--memory-limit', help="The per-container memory limit")
-    setup_parser.add_argument('--debug', '-d', action='store_true', default=False, help="Enable debug logging")
-    setup_parser.add_argument('--trace', '-t', action='store_true', default=False, help="Enable trace logging")
-    setup_parser.add_argument('--profiler', choices=['yourkit'], help="Enable profiling")
+    setup_parser.add_argument(
+        '--config',
+        '-c',
+        nargs='+',
+        help="The configuration(s) to apply to the cluster"
+    )
+    setup_parser.add_argument(
+        '--nodes',
+        '-n',
+        type=int,
+        default=3,
+        help="The number of nodes in the cluster"
+    )
+    setup_parser.add_argument(
+        '--version',
+        '-v',
+        type=str,
+        default='latest',
+        help="The version to setup"
+    )
+    setup_parser.add_argument(
+        '--subnet',
+        help="The subnet in which to create the cluster"
+    )
+    setup_parser.add_argument(
+        '--gateway',
+        help="The IPv4 gateway for the master subnet"
+    )
+    setup_parser.add_argument(
+        '--cpu',
+        help="CPUs in which to allow execution (0-3, 0,1)"
+    )
+    setup_parser.add_argument(
+        '--memory-limit',
+        help="The per-container memory limit"
+    )
+    setup_parser.add_argument(
+        '--debug',
+        '-d',
+        action='store_true',
+        default=False,
+        help="Enable debug logging"
+    )
+    setup_parser.add_argument(
+        '--trace',
+        '-t',
+        action='store_true',
+        default=False,
+        help="Enable trace logging"
+    )
+    setup_parser.add_argument(
+        '--profiler',
+        choices=['yourkit'],
+        help="Enable profiling"
+    )
     setup_parser.set_defaults(func=setup)
 
     teardown_parser = cluster_subparsers.add_parser('teardown', help="Tear down a test cluster")
-    teardown_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
+    teardown_parser.add_argument(
+        '-d',
+        '--delete',
+        action='store_true',
+        default=False,
+        help="Whether to delete the cluster logs"
+    )
     teardown_parser.set_defaults(func=teardown)
 
     cleanup_parser = cluster_subparsers.add_parser('cleanup', help="Cleans up all test clusters")
-    cleanup_parser.add_argument('-d', '--delete', action='store_true', default=False, help="Whether to delete the cluster logs")
+    cleanup_parser.add_argument(
+        '-d',
+        '--delete',
+        action='store_true',
+        default=False,
+        help="Whether to delete the cluster logs"
+    )
     cleanup_parser.set_defaults(func=cleanup)
 
     upgrade_parser = cluster_subparsers.add_parser('upgrade', help="Upgrades a test cluster")
-    upgrade_parser.add_argument('--version', '-v', type=str, default='latest', help="The version to which to upgrade")
+    upgrade_parser.add_argument(
+        '--version',
+        '-v',
+        type=str,
+        default='latest',
+        help="The version to which to upgrade"
+    )
     upgrade_parser.set_defaults(func=upgrade)
 
     add_node_parser = cluster_subparsers.add_parser('add-node', help="Add a node to a test cluster")
-    add_node_parser.add_argument('-c', '--config', nargs='+', help="The configuration(s) to apply to the node")
-    add_node_parser.add_argument('-v', '--version', type=str, default='latest', help="The version to setup")
+    add_node_parser.add_argument(
+        '-c',
+        '--config',
+        nargs='+',
+        help="The configuration(s) to apply to the node"
+    )
+    add_node_parser.add_argument(
+        '-v',
+        '--version',
+        type=str,
+        default='latest',
+        help="The version to setup"
+    )
     add_node_parser.set_defaults(func=add_node)
 
     remove_node_parser = cluster_subparsers.add_parser('remove-node', help="Remove a node from a test cluster")
@@ -375,11 +449,42 @@ def _create_parser():
     heal_parser.set_defaults(func=heal)
 
     delay_parser = cluster_subparsers.add_parser('delay', help="Delay packets to a node")
-    delay_parser.add_argument('node', nargs='?', type=name_or_id, help="The node to disrupt")
-    delay_parser.add_argument('-l', '--latency', default='50ms', type=milliseconds, metavar='DELTA', help="The latency in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]")
-    delay_parser.add_argument('-j', '--jitter', default='10ms', type=milliseconds, metavar='DELTA', help="The jitter in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]")
-    delay_parser.add_argument('-c', '--correlation', default='75%', type=percentage, help="The correlation")
-    delay_parser.add_argument('-d', '--distribution', default='normal', choices=['normal', 'pareto', 'paretonormal'], help="The distribution")
+    delay_parser.add_argument(
+        'node',
+        nargs='?',
+        type=name_or_id,
+        help="The node to disrupt"
+    )
+    delay_parser.add_argument(
+        '-l',
+        '--latency',
+        default='50ms',
+        type=milliseconds,
+        metavar='DELTA',
+        help="The latency in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]"
+    )
+    delay_parser.add_argument(
+        '-j',
+        '--jitter',
+        default='10ms',
+        type=milliseconds,
+        metavar='DELTA',
+        help="The jitter in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]"
+    )
+    delay_parser.add_argument(
+        '-c',
+        '--correlation',
+        default='75%',
+        type=percentage,
+        help="The correlation"
+    )
+    delay_parser.add_argument(
+        '-d',
+        '--distribution',
+        default='normal',
+        choices=['normal', 'pareto', 'paretonormal'],
+        help="The distribution"
+    )
     delay_parser.set_defaults(func=delay)
 
     drop_parser = cluster_subparsers.add_parser('drop', help="Drop packets to a node")
