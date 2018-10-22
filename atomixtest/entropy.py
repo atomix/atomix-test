@@ -39,8 +39,9 @@ def run(
     # Create a history object with which to track history
     history = History()
     controller = Controller(cluster, functions, function_delay, history)
+    nodes = cluster.nodes()
     primer = Primer(name, scale, history, cluster, prime)
-    processes = [Process(i+1, name, scale, history, ops, run_time, random.choice(cluster.nodes())) for i in range(processes)]
+    processes = [Process(i+1, name, scale, history, ops, run_time, nodes[i % len(nodes)]) for i in range(processes)]
 
     # Start the test.
     _start_test(primer, controller, processes)
@@ -103,7 +104,7 @@ class History(object):
     def record(self, entry):
         """Records an entry in the history."""
         self.entries.append(entry)
-        message = '{} {} {} ({})'.format(entry.process, entry.action, entry.operation, ', '.join([str(value) for value in entry.values]))
+        message = '[{}] {} {} ({})'.format(entry.process, entry.action, entry.operation, ', '.join([str(value) for value in entry.values]))
         if entry.action == 'invoke':
             logger.warn(message)
         elif entry.action == 'ok':
@@ -202,7 +203,10 @@ class Operator(Runnable):
 
     def _run(self):
         """Runs a random operation."""
-        return random.choice(self.operations)()
+        try:
+            return random.choice(self.operations)()
+        except:
+            pass
 
     def _random_node(self):
         """Returns a random node on which to perform an operation."""
@@ -398,7 +402,12 @@ class Controller(Runnable):
     def _partition(self, node1, node2):
         """Partitions node1 from node2."""
         node1.partition(node2)
-        node2.partition(node1)
+
+    def _isolate(self, node):
+        """Isolates the given node from all other nodes."""
+        for peer in self.cluster.nodes():
+            if node.name != peer.name:
+                self._partition(node, peer)
 
     def _partition_halves(self):
         """Partitions the cluster into two halves."""
@@ -423,6 +432,10 @@ class Controller(Runnable):
         if node1 is not None and node2 is not None:
             node1.heal(node2)
             node2.heal(node1)
+        elif node1 is not None:
+            for node2 in self.cluster.nodes():
+                if node1.name != node2.name:
+                    node1.heal(node2)
         else:
             for node1 in self.cluster.nodes():
                 for node2 in self.cluster.nodes():
@@ -503,6 +516,15 @@ class Controller(Runnable):
         self._partition(node1, node2)
         self._wait()
         self._heal(node1, node2)
+        self._stop("Fully connected")
+
+    def isolate_random(self):
+        """Isolates a random node from all other nodes."""
+        node = self._random_node()
+        self._start("Isolate %s" % (node,))
+        self._isolate(node)
+        self._wait()
+        self._heal(node)
         self._stop("Fully connected")
 
     def partition_halves(self):

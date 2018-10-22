@@ -146,6 +146,8 @@ def entropy_test(args):
     functions = []
     if args.partition_random:
         functions.append(('partition_random',))
+    if args.isolate_random:
+        functions.append(('isolate_random',))
     if args.partition_halves:
         functions.append(('partition_halves',))
     if args.partition_bridge:
@@ -442,6 +444,12 @@ def _create_parser():
         action='store_true',
         default=False,
         help="Enables a function that partitions a random set of nodes"
+    )
+    entropy_parser.add_argument(
+        '--isolate-random',
+        action='store_true',
+        default=False,
+        help="Enables a function that isolates a random node from all peers"
     )
     entropy_parser.add_argument(
         '--partition-halves',
