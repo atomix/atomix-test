@@ -43,7 +43,10 @@ def run(
     controller = Controller(cluster, functions, function_delay, history)
     nodes = cluster.nodes()
     primer = Primer(name, scale, history, cluster, prime)
-    processes = [Process(i+1, name, scale, history, ops, run_time, nodes[i % len(nodes)]) for i in range(processes)]
+    if ops < processes:
+        processes = [Process(i+1, name, scale, history, 1 if i < ops else 0, run_time, nodes[i % len(nodes)]) for i in range(processes)]
+    else:
+        processes = [Process(i+1, name, scale, history, ops / processes, run_time, nodes[i % len(nodes)]) for i in range(processes)]
 
     # Start the test.
     _start_test(primer, controller, processes)
@@ -380,13 +383,14 @@ class Process(Operator):
 
     def run(self):
         """Runs the process."""
-        self.start_time = time.time()
-        while True:
-            self._wait()
-            self._run()
-            self._check_stop()
-            if not self.running:
-                break
+        if self.ops > 0:
+            self.start_time = time.time()
+            while True:
+                self._wait()
+                self._run()
+                self._check_stop()
+                if not self.running:
+                    break
 
     def _check_stop(self):
         """Checks whether the run time has completed."""
