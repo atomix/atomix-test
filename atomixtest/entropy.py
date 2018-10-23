@@ -452,7 +452,7 @@ class Controller(Runnable):
         self.functions = []
         for func in functions:
             try:
-                self.functions.append((getattr(self, func[0]), func[1:]))
+                self.functions.append((getattr(self, func[0]), func[1], func[2]))
             except AttributeError:
                 print "Unknown entropy function %s" % (func[0],)
                 sys.exit(1)
@@ -461,14 +461,14 @@ class Controller(Runnable):
         """Runs the controller until stopped."""
         if len(self.functions) > 0:
             while self.running:
-                self._wait()
-                if self.running:
-                    self._run()
+                self._run()
 
     def _run(self):
         """Runs a random function."""
-        function, args = random.choice(self.functions)
-        function(*args)
+        function, delay, args = random.choice(self.functions)
+        self._wait(*delay)
+        if self.running:
+            function(**dict(args))
 
     def _wait(self, start=None, end=None):
         """Waits for a uniform random delay."""

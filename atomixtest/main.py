@@ -6,6 +6,7 @@ import re
 import sys
 import os
 import shutil
+from argparse import ArgumentParser, Namespace, ArgumentTypeError
 from datetime import timedelta
 
 def setup(args):
@@ -140,38 +141,156 @@ def stress(args):
 def destress(args):
     get_cluster(args.name).destress(args.node)
 
+def _entropy_functions():
+    return {
+        'crash': _parse_crash_args,
+        'partition': _parse_partition_args,
+        'restart': _parse_restart_args,
+        'stress': _parse_stress_args
+    }
+
 def entropy_test(args):
     from entropy import run
 
     functions = []
-    if args.partition_random is not None:
-        functions.append(tuple(['partition_random'] + args.partition_random))
-    if args.isolate_random is not None:
-        functions.append(tuple(['isolate_random'] + args.isolate_random))
-    if args.partition_halves is not None:
-        functions.append(tuple(['partition_halves'] + args.partition_halves))
-    if args.partition_bridge is not None:
-        functions.append(tuple(['partition_bridge'] + args.partition_bridge))
-    if args.crash_random is not None:
-        functions.append(tuple(['crash_random'] + args.crash_random))
-    if args.delay is not None:
-        functions.append(tuple(['delay'] + args.delay))
-    if args.delay_random is not None:
-        functions.append(tuple(['delay_random'] + args.delay_random))
-    if args.restart:
-        functions.append(('restart',))
-    if args.stress_cpu is not None:
-        functions.append(tuple(['stress_cpu'] + args.stress_cpu))
-    if args.stress_cpu_random is not None:
-        functions.append(tuple(['stress_cpu_random'] + args.stress_cpu_random))
-    if args.stress_io is not None:
-        functions.append(tuple(['stress_io'] + args.stress_io))
-    if args.stress_io_random is not None:
-        functions.append(tuple(['stress_io_random'] + args.stress_io_random))
-    if args.stress_memory is not None:
-        functions.append(tuple(['stress_memory'] + args.stress_memory))
-    if args.stress_memory_random is not None:
-        functions.append(tuple(['stress_memory_random'] + args.stress_memory_random))
+    def add_function(name, delay, *kwargs):
+        functions.append((name, delay, list(kwargs)))
+
+    if args.function_delay is not None:
+        function_delay = (
+            args.function_delay[0] if len(args.function_delay) > 0 else 15,
+            args.function_delay[1] if len(args.function_delay) > 1 else 30
+        )
+    else:
+        function_delay = (15, 30)
+
+    def get_or_default(l, i, d=None):
+        if len(l) > i:
+            return l[i]
+        return d
+
+    def get_delay(delay_args):
+        if delay_args.start is not None and delay_args.end is not None:
+            return delay_args.start, delay_args.end
+        elif delay_args.start is not None:
+            return delay_args.start, function_delay[1]
+        else:
+            return function_delay
+
+    if 'crash' in args:
+        crash = args.crash
+        add_function(
+            'crash_random',
+            get_delay(crash),
+            ('start', get_or_default(crash.random, 0, 15.0)),
+            ('end', get_or_default(crash.random, 1, 30.0))
+        )
+    if 'partition' in args:
+        partition = args.partition
+        if partition.random is not None:
+            add_function(
+                'partition_random',
+                get_delay(partition),
+                ('start', get_or_default(partition.random, 0, 15.0)),
+                ('end', get_or_default(partition.random, 1, 30.0))
+            )
+        if partition.isolate is not None:
+            add_function(
+                'isolate_random',
+                get_delay(partition),
+                ('start', get_or_default(partition.isolate, 0, 15.0)),
+                ('end', get_or_default(partition.isolate, 1, 30.0))
+            )
+        if partition.bridge is not None:
+            add_function(
+                'partition_bridge',
+                get_delay(partition),
+                ('start', get_or_default(partition.bridge, 0, 15.0)),
+                ('end', get_or_default(partition.bridge, 1, 30.0))
+            )
+        if partition.halves is not None:
+            add_function(
+                'partition_halves',
+                get_delay(partition),
+                ('start', get_or_default(partition.halves, 0, 15.0)),
+                ('end', get_or_default(partition.halves, 1, 30.0))
+            )
+    if 'restart' in args:
+        add_function('restart', (15.0, 30.0))
+    if 'stress' in args:
+        stress = args.stress
+        if stress.network is not None:
+            if stress.all is not None:
+                add_function(
+                    'delay',
+                    get_delay(stress),
+                    ('latency', stress.network),
+                    ('start', get_or_default(stress.all, 0, 15.0)),
+                    ('end', get_or_default(stress.all, 1, 30.0))
+                )
+            if stress.random is not None:
+                add_function(
+                    'delay_random',
+                    get_delay(stress),
+                    ('latency', stress.network),
+                    ('start', get_or_default(stress.random, 0, 15.0)),
+                    ('end', get_or_default(stress.random, 1, 30.0))
+                )
+        if stress.cpu is not None:
+            if stress.all is not None:
+                add_function(
+                    'stress_cpu',
+                    get_delay(stress),
+                    ('processes', stress.cpu),
+                    ('start', get_or_default(stress.all, 0, 15.0)),
+                    ('end', get_or_default(stress.all, 1, 30.0))
+                )
+            if stress.random is not None:
+                add_function(
+                    'stress_cpu_random',
+                    get_delay(stress),
+                    ('processes', stress.cpu),
+                    ('start', get_or_default(stress.random, 0, 15.0)),
+                    ('end', get_or_default(stress.random, 1, 30.0))
+                )
+        if stress.io is not None:
+            if stress.all is not None:
+                add_function(
+                    'stress_io',
+                    get_delay(stress),
+                    ('processes', stress.io),
+                    ('start', get_or_default(stress.all, 0, 15.0)),
+                    ('end', get_or_default(stress.all, 1, 30.0))
+                )
+            if stress.random is not None:
+                add_function(
+                    'stress_io_random',
+                    get_delay(stress),
+                    ('processes', stress.io),
+                    ('start', get_or_default(stress.random, 0, 15.0)),
+                    ('end', get_or_default(stress.random, 1, 30.0))
+                )
+        if stress.memory is not None:
+            if stress.all is not None:
+                add_function(
+                    'stress_memory',
+                    get_delay(stress),
+                    ('processes', stress.memory),
+                    ('start', get_or_default(stress.all, 0, 15.0)),
+                    ('end', get_or_default(stress.all, 1, 30.0))
+                )
+            if stress.random is not None:
+                add_function(
+                    'stress_memory_random',
+                    get_delay(stress),
+                    ('processes', stress.memory),
+                    ('start', get_or_default(stress.random, 0, 15.0)),
+                    ('end', get_or_default(stress.random, 1, 30.0))
+                )
+
+    if args.debug:
+        for function in functions:
+            print function[0] + '(' + ', '.join([str(arg[0]) + '=' + str(arg[1]) for arg in function[2]]) + ')'
 
     sys.exit(run(
         nodes=args.nodes,
@@ -183,16 +302,45 @@ def entropy_test(args):
         prime=args.prime,
         ops=args.ops,
         run_time=args.run_time,
-        functions=functions,
-        function_delay=args.function_delay
+        functions=functions
     ))
 
 def run(args):
     from test import run
     sys.exit(run(args.paths, fail_fast=args.fail_fast))
 
-def _create_parser():
-    import argparse
+def percentage(value):
+    if value.endswith('%'):
+        return float(value[:-1]) / 100
+    return float(value)
+
+def _parse_milliseconds(time):
+    regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m(?!s))?((?P<seconds>\d+?)s)?((?P<milliseconds>\d+?)ms)?')
+    parts = regex.match(time.lower())
+    if not parts:
+        return None
+    parts = parts.groupdict()
+    time_params = {}
+    for (name, param) in parts.iteritems():
+        if param:
+            time_params[name] = int(param)
+    if not time_params:
+        return None
+    return int(timedelta(**time_params).total_seconds() * 1000)
+
+def milliseconds(time):
+    millis = _parse_milliseconds(time)
+    if millis is None:
+        return float(time)
+    return time
+
+def seconds(time):
+    millis = _parse_milliseconds(time)
+    if millis is None:
+        return float(time)
+    return millis / 1000.0
+
+def _parse_cluster_args(args):
 
     def percentage(value):
         if value.endswith('%'):
@@ -234,7 +382,7 @@ def _create_parser():
                 elif len(args) == 1:
                     return seconds(arg)
                 else:
-                    raise argparse.ArgumentTypeError("Too many arguments")
+                    raise ArgumentTypeError("Too many arguments")
             finally:
                 args.append(arg)
         return func
@@ -246,7 +394,7 @@ def _create_parser():
                 if len(args) < 2:
                     return seconds(arg)
                 else:
-                    raise argparse.ArgumentTypeError("Too many arguments")
+                    raise ArgumentTypeError("Too many arguments")
             finally:
                 args.append(arg)
         return func
@@ -259,11 +407,11 @@ def _create_parser():
                     try:
                         return int(arg)
                     except ValueError, e:
-                        raise argparse.ArgumentTypeError(e)
+                        raise ArgumentTypeError(e)
                 elif len(args) < 3:
                     return seconds(arg)
                 else:
-                    raise argparse.ArgumentTypeError("Too many arguments")
+                    raise ArgumentTypeError("Too many arguments")
             finally:
                 args.append(arg)
         return func
@@ -274,7 +422,7 @@ def _create_parser():
         except ValueError:
             return value
 
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
     subparsers = parser.add_subparsers()
 
     cluster_parser = subparsers.add_parser('cluster', help="Cluster commands")
@@ -538,7 +686,18 @@ def _create_parser():
     logs_parser.set_defaults(func=logs)
 
     entropy_parser = subparsers.add_parser('entropy', help="Run an entropy test")
-    entropy_parser.add_argument(
+
+    run_parser = subparsers.add_parser('run', help="Run a test")
+    run_parser.add_argument('paths', nargs='+', help="The modules or packages containing the test(s) to run")
+    run_parser.add_argument('-ff', '--fail-fast', action='store_true', default=False, help="Whether to fail the test run on the first individual test failure")
+    run_parser.set_defaults(func=run)
+
+    return parser.parse_args(args)
+
+def _parse_root_args(args):
+    functions = _entropy_functions().keys()
+    parser = ArgumentParser(prog='atomix-test entropy')
+    parser.add_argument(
         '--nodes',
         '-n',
         type=int,
@@ -546,27 +705,33 @@ def _create_parser():
         metavar='NUM',
         help="The number of nodes in the cluster. Each node will be configured with the provided configurations."
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '--config',
         '-c',
         nargs='+',
         metavar='FILE',
         help="The configuration(s) to apply to the cluster."
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '--version',
         '-v',
         type=str,
         default='latest',
         help="The version of Atomix to setup. Must be a full semver version string, e.g. 3.0.6"
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        default=False,
+        help="Prints debug output to display the functions that will be run."
+    )
+    parser.add_argument(
         '--dry-run',
         action='store_true',
         default=False,
         help="Run entropy test without live containers."
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '-p',
         '--parallelism',
         type=int,
@@ -575,7 +740,7 @@ def _create_parser():
         help="""Number of parallel processes with which to test. Each parallel process will perform a subset of the 
         operations. Defaults to 8."""
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '-s',
         '--scale',
         type=int,
@@ -584,7 +749,7 @@ def _create_parser():
         help="""Number of unique keys to write to the cluster. The scale is directly proportional to the maximum
         amount of memory consumed by the test run."""
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '--prime',
         type=int,
         default=0,
@@ -592,7 +757,7 @@ def _create_parser():
         help="""Number of write operations with which to prime the cluster. These operations will be performed 
         prior to the test time beginning."""
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '--ops',
         type=int,
         default=1,
@@ -600,162 +765,254 @@ def _create_parser():
         help="""Number of operations to execute per second. The operations will be randomly distributed among all the
         specified processes such that the total operations per second from all processes matches this input."""
     )
-    entropy_parser.add_argument(
+    parser.add_argument(
         '-t',
         '--run-time',
         type=seconds,
         default='1m',
-        metavar='DELTA',
+        metavar='DURATION',
         help="The amount of time for which to run the test in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]"
     )
-    entropy_parser.add_argument(
-        '--partition-random',
-        nargs='*',
-        type=seconds_range(),
-        metavar="START END",
-        help="""Enables a function that partitions a random set of nodes. By default, the nodes are partitioned for the
-        function delay, but users can optionally specify a partition time and/or range by providing one or two arguments."""
-    )
-    entropy_parser.add_argument(
-        '--isolate-random',
-        nargs='*',
-        type=seconds_range(),
-        metavar="START END",
-        help="""Enables a function that isolates a random node from all peers. By default, the nodes are partitioned for the
-        function delay, but users can optionally specify a partition time and/or range by providing one or two arguments."""
-    )
-    entropy_parser.add_argument(
-        '--partition-halves',
-        nargs='*',
-        type=seconds_range(),
-        metavar="START END",
-        help="""Enables a function that partitions the cluster into two halves. By default, the nodes are partitioned for the
-        function delay, but users can optionally specify a partition time and/or range by providing one or two arguments."""
-    )
-    entropy_parser.add_argument(
-        '--partition-bridge',
-        nargs='*',
-        type=seconds_range(),
-        metavar="START END",
-        help="""Enables a function that partitions the cluster into two halves with a single shared bridge node. 
-        By default, the nodes are partitioned for the function delay, but users can optionally specify a partition time
-        and/or range by providing one or two arguments."""
-    )
-    entropy_parser.add_argument(
-        '--crash-random',
-        nargs='*',
-        type=seconds_range(),
-        metavar="START END",
-        help="""Enables a function that crashes a random node. By default, the nodes are partitioned for the function
-        delay, but users can optionally specify a fault period and/or range by providing one or two arguments."""
-    )
-    entropy_parser.add_argument(
-        '--delay',
-        nargs='*',
-        type=milliseconds_plus_seconds_range(),
-        metavar='DELAY START END',
-        help="""Enables a function that injects network latency on all nodes in the network,
-        optionally including the delay period in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
-        as well as a delay period and/or range by providing one or two additional arguments in the format
-        [<hours>h][<minutes>m][<seconds>s].
-        """
-    )
-    entropy_parser.add_argument(
-        '--delay-random',
-        nargs='*',
-        type=milliseconds_plus_seconds_range(),
-        metavar='DELAY START END',
-        help="""Enables a function that injects network latency on a random node in the network,
-        optionally including the delay period in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
-        as well as a delay period and/or range by providing one or two additional arguments in the format
-        [<hours>h][<minutes>m][<seconds>s].
-        """
-    )
-    entropy_parser.add_argument(
-        '--restart',
-        action='store_true',
-        default=False,
-        help="Enables a function that restarts all the nodes in the cluster."
-    )
-    entropy_parser.add_argument(
-        '--stress-cpu',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes CPU on all the nodes in the cluster. An optional argument can specify
-        the number of processes with which to consume CPU. The optional second and third arguments specify the period
-        for which to consume CPU."""
-    )
-    entropy_parser.add_argument(
-        '--stress-cpu-random',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes CPU on a random node in the cluster. An optional argument can specify
-        the number of processes with which to consume CPU. The optional second and third arguments specify the period
-        for which to consume CPU."""
-    )
-    entropy_parser.add_argument(
-        '--stress-io',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes I/O on all the nodes in the cluster. An optional argument can specify
-        the number of processes with which to consume I/O. The optional second and third arguments specify the period
-        for which to consume I/O."""
-    )
-    entropy_parser.add_argument(
-        '--stress-io-random',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes I/O on a random node in the cluster. An optional argument can specify
-        the number of processes with which to consume I/O. The optional second and third arguments specify the period
-        for which to consume I/O."""
-    )
-    entropy_parser.add_argument(
-        '--stress-memory',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes memory on all the nodes in the cluster. An optional argument can specify
-        the number of processes with which to consume memory. The optional second and third arguments specify the period
-        for which to consume memory."""
-    )
-    entropy_parser.add_argument(
-        '--stress-memory-random',
-        nargs='*',
-        type=int_plus_seconds_range(),
-        metavar='NUM START END',
-        help="""Enables a function that consumes memory on a random node in the cluster. An optional argument can specify
-        the number of processes with which to consume memory. The optional second and third arguments specify the period
-        for which to consume memory."""
-    )
-    entropy_parser.add_argument(
+    parser.add_argument(
+        '-d',
         '--function-delay',
         type=seconds,
-        nargs=2,
-        default=[15, 30],
-        metavar='DELTA',
+        nargs='*',
+        metavar='DURATION',
         help="""Uniform random delay to wait between entropy functions. Defaults to 15s-30s between functions
         The delay period is specified in the format [<hours>h][<minutes>m][<seconds>s][<milliseconds>ms]
         """
     )
-    entropy_parser.set_defaults(func=entropy_test)
 
-    run_parser = subparsers.add_parser('run', help="Run a test")
-    run_parser.add_argument('paths', nargs='+', help="The modules or packages containing the test(s) to run")
-    run_parser.add_argument('-ff', '--fail-fast', action='store_true', default=False, help="Whether to fail the test run on the first individual test failure")
-    run_parser.set_defaults(func=run)
+    subparsers = parser.add_subparsers()
+    for function in functions:
+        subparsers.add_parser(function)
+    return parser.parse_args(args)
 
-    return parser
+def _parse_crash_args(args):
+    parser = ArgumentParser(prog='atomix-test entropy crash')
+    parser.add_argument(
+        'start',
+        nargs='?',
+        type=seconds,
+        help="The beginning of the crash period."
+    )
+    parser.add_argument(
+        'end',
+        nargs='?',
+        type=seconds,
+        help="The end of the crash period."
+    )
+    parser.add_argument('--random', '-r', nargs='*', type=seconds, metavar='DURATION', help="Crash a random node")
+
+    namespace = parser.parse_args(args)
+    if namespace.random is not None and len(namespace.random) > 2:
+        parser.error("argument --random/-r: expected 0-2 argument(s)")
+    return namespace
+
+def _parse_partition_args(args):
+    parser = ArgumentParser(prog='atomix-test entropy partition')
+    parser.add_argument(
+        'start',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The beginning of the partition period."
+    )
+    parser.add_argument(
+        'end',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The end of the partition period."
+    )
+    parser.add_argument(
+        '-r',
+        '--random',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Partition a random set of nodes"
+    )
+    parser.add_argument(
+        '-i',
+        '--isolate',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Isolate a random node"
+    )
+    parser.add_argument(
+        '-b',
+        '--bridge',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Partition the cluster with a bridge node."
+    )
+    parser.add_argument(
+        '-v',
+        '--halves',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Partition the cluster into two halves."
+    )
+
+    namespace = parser.parse_args(args)
+    if namespace.random is not None and len(namespace.random) > 2:
+        parser.error("argument --random/-r: expected 0-2 argument(s)")
+    if namespace.isolate is not None and len(namespace.isolate) > 2:
+        parser.error("argument --isolate/-i: expected 0-2 argument(s)")
+    if namespace.bridge is not None and len(namespace.bridge) > 2:
+        parser.error("argument --bridge/-b: expected 0-2 argument(s)")
+    if namespace.halves is not None and len(namespace.halves) > 2:
+        parser.error("argument --halves/-v: expected 0-2 argument(s)")
+    return namespace
+
+def _parse_restart_args(args):
+    parser = ArgumentParser(prog='atomix-test entropy restart')
+    return parser.parse_args(args)
+
+def _parse_stress_args(args):
+    parser = ArgumentParser(prog='atomix-test entropy stress')
+    parser.add_argument(
+        'start',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The beginning of the stress period."
+    )
+    parser.add_argument(
+        'end',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The end of the stress period."
+    )
+    parser.add_argument(
+        '-r',
+        '--random',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Stress a random node"
+    )
+    parser.add_argument(
+        '-a',
+        '--all',
+        nargs='*',
+        type=seconds,
+        metavar='DURATION',
+        help="Stress all nodes"
+    )
+    parser.add_argument(
+        '-n',
+        '--network',
+        nargs='?',
+        type=milliseconds,
+        const=1,
+        metavar='LATENCY',
+        help="Stress the network"
+    )
+    parser.add_argument(
+        '-c',
+        '--cpu',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Stress the CPU"
+    )
+    parser.add_argument(
+        '-i',
+        '--io',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Stress the I/O"
+    )
+    parser.add_argument(
+        '-m',
+        '--memory',
+        nargs='?',
+        type=int,
+        const=1,
+        metavar='PROCESSES',
+        help="Stress the memory"
+    )
+
+    namespace = parser.parse_args(args)
+    if namespace.random is not None and len(namespace.random) > 2:
+        parser.error("argument --random/-r: expected 0-2 argument(s)")
+    if namespace.all is not None and len(namespace.all) > 2:
+        parser.error("argument --all/-a: expected 0-2 argument(s)")
+    return namespace
+
+def _parse_entropy_args(args):
+    functions = _entropy_functions()
+
+    results = {'func': entropy_test}
+    root_args = []
+    root_parsed = False
+
+    # Iterate through the arguments and apply them to subparsers.
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        # If this is a help argument, apply the help to the current subparser if one is specified, otherwise
+        # apply the help argument to the root parser.
+        if arg in ('--help', '-h'):
+            return _parse_root_args(['-h'])
+        # If the argument is a function name, parse the root arguments, create a subparser, then parse
+        # the subparser arguments.
+        elif arg in functions:
+            # If no parser has yet been defined, create a root parser and parse root arguments.
+            if not root_parsed:
+                results.update(vars(_parse_root_args(root_args + [arg])))
+                root_parsed = True
+
+            # Iterate through remaining arguments until the next function name is located and populate function arguments.
+            parser_args = None
+            for j in range(i + 1, len(args)):
+                if args[j] in ('--help', '-h'):
+                    return functions[arg](['-h'])
+                elif args[j] in functions:
+                    parser_args = args[i+1:j-1]
+                    break
+
+            # If no next function has been found, parse the remaining arguments.
+            if parser_args is None:
+                parser_args = args[i+1:]
+
+            # Parse the function arguments then update the result dict.
+            results[arg] = functions[arg](parser_args)
+
+            # Increment the next argument index by the length of the parser arguments plus 1 for the function name.
+            i += 1 + len(parser_args)
+        # If this is a root argument, just append the argument and increment the next argument index.
+        else:
+            root_args.append(arg)
+            i += 1
+    return Namespace(**results)
+
+
+def parse_args():
+    args = sys.argv
+    if args[1] == 'entropy':
+        return _parse_entropy_args(args[2:])
+    else:
+        return _parse_cluster_args(args[1:])
+
 
 def main():
     """Runs the test framework."""
     from colorama import init
     init()
 
-    args = _create_parser().parse_args()
+    args = parse_args()
     try:
         args.func(args)
     except TestError, e:
