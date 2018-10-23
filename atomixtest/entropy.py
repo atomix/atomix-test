@@ -305,12 +305,15 @@ class Operator(Runnable):
         self.stop()
         return False
 
+from threading import Thread, Lock
 
 class Primer(Operator):
     def __init__(self, name, scale, history, cluster, prime=0):
         super(Primer, self).__init__('primer', name, scale, history)
         self.cluster = cluster
         self.prime = prime
+        self._lock = Lock()
+        self._count = 0
 
     def _invoke(self, operation, *values):
         """Logs an operation invocation event in the process history."""
@@ -326,7 +329,35 @@ class Primer(Operator):
     def run(self):
         """Runs the primer."""
         self._info('prime', self.prime)
-        for i in range(self.prime):
+        if self.prime == 0:
+            return
+
+        threads = []
+        for _ in range(32):
+            thread = Thread(target=self._run)
+            thread.setDaemon(True)
+            threads.append(thread)
+
+        for thread in threads:
+            thread.start()
+
+        while True:
+            for thread in threads:
+                thread.join()
+
+    def _run(self):
+        """Runs a thread."""
+        while True:
+            self._lock.acquire()
+            try:
+                count = self._count + 1
+                if count <= self.prime:
+                    self._count = count
+                else:
+                    return
+            finally:
+                self._lock.release()
+
             key, value = self._random_key(), self._random_value()
             self._random_node().map(self.name).put(key, value)
 
