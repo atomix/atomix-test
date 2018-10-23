@@ -1,14 +1,14 @@
-from atomix import AtomixClient
 import json
 import random
 import sys
-import threading
 import time
 import uuid
 from abc import ABCMeta, abstractmethod
+from atomix import AtomixClient
 from collections import OrderedDict
+from threading import Thread, Lock
 
-from cluster import Cluster, Node
+from cluster import Cluster
 from logging import logger
 
 
@@ -229,7 +229,7 @@ class Runnable(object):
 
     def start(self):
         """Starts the runnable thread."""
-        self.thread = threading.Thread(target=self.run)
+        self.thread = Thread(target=self.run)
         self.thread.daemon = True
         self.running = True
         self.thread.start()
@@ -304,8 +304,6 @@ class Operator(Runnable):
         self._log('info', operation, *values)
         self.stop()
         return False
-
-from threading import Thread, Lock
 
 class Primer(Operator):
     def __init__(self, name, scale, history, cluster, prime=0):
