@@ -31,7 +31,7 @@ class Cluster(object):
     @property
     def path(self):
         """Returns the cluster data path."""
-        return os.path.join(os.getcwd(), '.data', self.name)
+        return os.path.join(os.getcwd(), 'data', self.name)
 
     @property
     def cpus(self):
