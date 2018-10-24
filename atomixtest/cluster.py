@@ -497,7 +497,7 @@ class Node(object):
 
         logger.info("Running container %s", self.name)
         self._docker_client.containers.run(
-            'atomix/atomix:{}'.format(self.version),
+            'atomix/atomix-test:{}'.format(self.version),
             ' '.join([shlex_quote(str(arg)) for arg in args]),
             name=self.name,
             labels={

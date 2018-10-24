@@ -17,7 +17,10 @@ The test framework requires that the Docker engine be running. It uses
 [docker-py](http://github.com/docker/docker-py) to communicate with the Docker engine
 to create networks and containers for test clusters.
 
-Additionally, you should build the Atomix Docker container with `docker build -t atomix .`
+Additionally, the [Atomix Python client](https://github.com/atomix/atomix-py)
+is required for performing operations on the Atomix cluster.
+
+To build the test Docker container, run `docker build -t atomix/atomix-test .`
 
 ### Setup
 
