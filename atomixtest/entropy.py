@@ -175,7 +175,7 @@ class History(object):
             logger.debug(message)
         elif entry.action == 'fail':
             logger.error(message)
-        elif entry.action == 'info':
+        elif entry.action == 'function':
             logger.info(message)
 
     def count(self, action):
@@ -215,7 +215,7 @@ class ControllerEntry(HistoryEntry):
     """Controller history entry."""
     def __init__(self, event, message):
         self.process = 'controller'
-        self.action = 'info'
+        self.action = 'function'
         self.operation = event
         self.values = (message,)
         self.event = event
@@ -302,9 +302,9 @@ class Operator(Runnable):
         self._log('fail', operation, *values)
         return True
 
-    def _info(self, operation, *values):
-        """Logs an operation info event in the process history and stops the process."""
-        self._log('info', operation, *values)
+    def _function(self, operation, *values):
+        """Logs an operation function event in the process history and stops the process."""
+        self._log('function', operation, *values)
         self.stop()
         return False
 
@@ -329,7 +329,7 @@ class Primer(Operator):
 
     def run(self):
         """Runs the primer."""
-        self._info('prime', self.prime)
+        self._function('prime', self.prime)
         if self.prime == 0:
             return
 
@@ -417,7 +417,7 @@ class Process(Operator):
         try:
             return self._ok('read', key, self.node.map(self.name).get(key))
         except:
-            return self._info('read', key)
+            return self._fail('read', key)
 
     def write(self):
         """Executes a write operation."""
@@ -427,7 +427,7 @@ class Process(Operator):
             self.node.map(self.name).put(key, value)
             return self._ok('write', key, value)
         except:
-            return self._info('write', key, value)
+            return self._fail('write', key, value)
 
     def delete(self):
         """Executes a delete operation."""
@@ -437,7 +437,7 @@ class Process(Operator):
             self.node.map(self.name).remove(key)
             return self._ok('delete', key)
         except:
-            return self._info('delete', key)
+            return self._fail('delete', key)
 
 
 class Controller(Runnable):
@@ -491,13 +491,13 @@ class Controller(Runnable):
         """Logs an event in the function history."""
         self.history.record(ControllerEntry(event, message))
 
-    def _start(self, message):
+    def _enter(self, function):
         """Logs a start event in the function history."""
-        self._log('start', message)
+        self._log('enter', function)
 
-    def _stop(self, message):
+    def _exit(self, function):
         """Logs a stop event in the function history."""
-        self._log('stop', message)
+        self._log('exit', function)
 
     def _partition(self, node1, node2):
         """Partitions node1 from node2."""
@@ -612,113 +612,113 @@ class Controller(Runnable):
         node2 = node1
         while node2 == node1:
             node2 = self._random_node()
-        self._start("Cut off %s->%s" % (node1, node2))
+        self._enter("Cut off %s->%s" % (node1, node2))
         self._partition(node1, node2)
         self._wait()
         self._heal(node1, node2)
-        self._stop("Fully connected")
+        self._exit("Fully connected")
 
     def isolate_random(self, start=15, end=30):
         """Isolates a random node from all other nodes."""
         node = self._random_node()
-        self._start("Isolate %s" % (node,))
+        self._enter("Isolate %s" % (node,))
         self._isolate(node)
         self._wait(start, end)
         self._heal(node)
-        self._stop("Fully connected")
+        self._exit("Fully connected")
 
     def partition_halves(self, start=15, end=30):
         """Partitions the cluster into two halves."""
-        self._start("Partitioning network into two halves")
+        self._enter("Partitioning network into two halves")
         self._partition_halves()
         self._wait(start, end)
         self._heal()
-        self._stop("Fully connected")
+        self._exit("Fully connected")
 
     def partition_bridge(self, start=15, end=30):
         """Partitions the cluster into two halves with a bridge between them."""
         node = self._random_node()
-        self._start("Partitioning network with bridge %s" % (node,))
+        self._enter("Partitioning network with bridge %s" % (node,))
         self._partition_bridge(node)
         self._wait(start, end)
         self._heal()
-        self._stop("Fully connected")
+        self._exit("Fully connected")
 
     def crash_random(self, start=15, end=30):
         """Crashes a random node."""
         node = self._random_node()
-        self._start("Crashing %s" % (node,))
+        self._enter("Crashing %s" % (node,))
         self._crash(node)
         self._wait(start, end)
         self._recover(node)
-        self._stop("Recovered %s" % (node,))
+        self._exit("Recovered %s" % (node,))
 
     def delay(self, latency=100, start=15, end=30):
         """Delays messages on all nodes."""
-        self._start("Delay communication on all nodes")
+        self._enter("Delay communication on all nodes")
         self._delay(latency=latency)
         self._wait(start, end)
         self._restore()
-        self._stop("Communication restored")
+        self._exit("Communication restored")
 
     def delay_random(self, latency=100, start=15, end=30):
         """Delays communication on a random node."""
         node = self._random_node()
-        self._start("Delay communication on %s" % (node,))
+        self._enter("Delay communication on %s" % (node,))
         self._delay(node, latency=latency)
         self._wait(start, end)
         self._restore(node)
-        self._stop("Communication restored on %s" % (node,))
+        self._exit("Communication restored on %s" % (node,))
 
     def restart(self):
         """Restarts the entire cluster."""
-        self._start("Restarting cluster")
+        self._enter("Restarting cluster")
         self._shutdown()
         self._wait()
         self._startup()
-        self._stop("Cluster restarted")
+        self._exit("Cluster restarted")
 
     def stress_cpu(self, processes=1, start=15, end=30):
-        self._start("Increase CPU usage on all nodes")
+        self._enter("Increase CPU usage on all nodes")
         self._stress_cpu(processes=processes)
         self._wait(start, end)
         self._destress()
-        self._stop("CPU usage reduced on all nodes")
+        self._exit("CPU usage reduced on all nodes")
 
     def stress_io(self, processes=1, start=15, end=30):
-        self._start("Increase I/O on all nodes")
+        self._enter("Increase I/O on all nodes")
         self._stress_io(processes=processes)
         self._wait(start, end)
         self._destress()
-        self._stop("I/O reduced on all nodes")
+        self._exit("I/O reduced on all nodes")
 
     def stress_memory(self, processes=1, start=15, end=30):
-        self._start("Increase memory usage on all nodes")
+        self._enter("Increase memory usage on all nodes")
         self._stress_memory(processes=processes)
         self._wait(start, end)
         self._destress()
-        self._stop("Memory usage reduced on all nodes")
+        self._exit("Memory usage reduced on all nodes")
 
     def stress_cpu_random(self, processes=1, start=15, end=30):
         node = self._random_node()
-        self._start("Increase CPU usage on %s" % (node,))
+        self._enter("Increase CPU usage on %s" % (node,))
         self._stress_cpu(node, processes)
         self._wait(start, end)
         self._destress(node)
-        self._stop("CPU usage reduced on %s" % (node,))
+        self._exit("CPU usage reduced on %s" % (node,))
 
     def stress_io_random(self, processes=1, start=15, end=30):
         node = self._random_node()
-        self._start("Increase I/O on %s" % (node,))
+        self._enter("Increase I/O on %s" % (node,))
         self._stress_io(node, processes)
         self._wait(start, end)
         self._destress(node)
-        self._stop("I/O reduced on %s" % (node,))
+        self._exit("I/O reduced on %s" % (node,))
 
     def stress_memory_random(self, processes=1, start=15, end=30):
         node = self._random_node()
-        self._start("Increase memory usage on %s" % (node,))
+        self._enter("Increase memory usage on %s" % (node,))
         self._stress_memory(node, processes)
         self._wait(start, end)
         self._destress(node)
-        self._stop("Memory usage reduced on %s" % (node,))
+        self._exit("Memory usage reduced on %s" % (node,))
