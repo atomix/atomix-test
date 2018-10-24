@@ -567,15 +567,11 @@ class Controller(Runnable):
 
     def _shutdown(self):
         """Shuts down the entire cluster."""
-        for node in self.cluster.nodes():
-            node.kill()
+        self.cluster.shutdown()
 
     def _startup(self):
         """Starts up the entire cluster."""
-        for node in self.cluster.nodes():
-            node.start()
-        for node in self.cluster.nodes():
-            node.wait_for_start()
+        self.cluster.startup()
 
     def _stress_cpu(self, node=None, processes=1):
         if node is not None:

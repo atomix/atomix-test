@@ -552,7 +552,6 @@ class Node(object):
         """Starts the node."""
         logger.info("Starting node %s", self.name)
         self.docker_container.start()
-        self.wait_for_start()
 
     def kill(self):
         """Kills the node."""
