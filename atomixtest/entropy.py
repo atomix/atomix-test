@@ -342,9 +342,8 @@ class Primer(Operator):
         for thread in threads:
             thread.start()
 
-        while True:
-            for thread in threads:
-                thread.join()
+        for thread in threads:
+            thread.join()
 
     def _run(self):
         """Runs a thread."""
