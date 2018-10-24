@@ -283,6 +283,15 @@ cluster during the entropy test
 * `--run-time` - the total number of time for which to run the entropy test.
 Times are specified in human readable format, e.g. `10m30s`
 
+For example, to prime a consensus cluster with 10,000 operations on 1,000
+distinct keys, running a test for 10 minutes with randomized crashes and
+isolating network partitions while submitting 50 operations per second,
+use the following command:
+
+```
+atomix-test entropy --nodes 3 --config consensus --prime 10000 --scale 1000 --ops 50 --run-time 10m crash --random 30s partition --isolate 30s 1m
+```
+
 The following entropy functions are supported by the entropy command:
 * `crash`
 * `partition`
