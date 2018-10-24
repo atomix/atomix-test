@@ -32,6 +32,10 @@ is required for performing operations on the Atomix cluster.
    * [Accessing primitives](#accessing-primitives)
    * [Fault injection](#fault-injection)
 4. [Entropy testing](#entropy-testing)
+   * [crash](#crash)
+   * [partition](#partition)
+   * [stress](#stress)
+   * [restart](#restart)
 5. [API](#api)
 
 ### Setup
