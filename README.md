@@ -20,13 +20,25 @@ to create networks and containers for test clusters.
 Additionally, the [Atomix Python client](https://github.com/atomix/atomix-py)
 is required for performing operations on the Atomix cluster.
 
-To build the test Docker container, run `docker build -t atomix/atomix-test .`
+## Table of contents
+1. [Setup](#setup)
+2. [Managing test clusters](#managing-test-clusters)
+   * [Creating a new test cluster](#creating-a-new-test-cluster)
+   * [List cluster info](#list-cluster-info)
+   * [Resize a cluster](#resize-a-cluster)
+   * [Shutdown a cluster](#shutdown-a-cluster)
+3. [Writing tests](#writing-tests)
+   * [Managing clusters](#managing-clusters)
+   * [Accessing primitives](#accessing-primitives)
+   * [Fault injection](#fault-injection)
+4. [Fault injection testing](#fault-injection-testing)
+5. [API](#api)
 
 ### Setup
 
-To install the test framework, run `python setup.py install`
+To build the test Docker container, run `docker build -t atomix/atomix-test .`
 
-To run tests, run `python setup.py test`
+To install the test framework, run `python setup.py install`
 
 ## Managing test clusters
 
@@ -38,7 +50,7 @@ To view a list of cluster management commands, run `atomix-test cluster -h`
 To create a new test cluster, use the `setup` command, providing a named configuration for the nodes to run:
 
 ```
-> atomix-test cluster -i my-cluster setup -c consensus
+> atomix-test cluster my-cluster setup -c consensus
 my-cluster Setting up cluster
 my-cluster Creating network
 my-cluster Running container my-cluster-1
@@ -50,7 +62,7 @@ my-cluster Waiting for cluster bootstrap
 To configure the cluster with more than three nodes, pass a `--nodes` or `-n` argument:
 
 ```
-> atomix-test cluster -i my-cluster setup -n 5
+> atomix-test cluster my-cluster setup -n 5
 ```
 
 Running the `setup` command will set up a new Docker network and a set of containers.
@@ -84,7 +96,7 @@ my-other-cluster
 To list the nodes in a cluster, use the `nodes` command:
 
 ```
-> atomix-test cluster -i my-cluster nodes
+> atomix-test cluster my-cluster nodes
 ID     NAME             STATUS      IP             LOCAL PORT
 1      my-cluster-1     running     172.18.0.2     61170
 2      my-cluster-2     running     172.18.0.3     61171
@@ -103,13 +115,13 @@ running.
 To add a node to a cluster, use the `add-node` command:
 
 ```
-> atomix-test cluster -i my-cluster add-node -c client
+> atomix-test cluster my-cluster add-node -c client
 ```
 
 To remove a node from a cluster, use the `remove-node` command, passing the node ID as the last argument:
 
 ```
-> atomix-test cluster -i my-cluster remove-node 4
+> atomix-test cluster my-cluster remove-node 4
 ```
 
 ### Shutdown a cluster
@@ -117,7 +129,7 @@ To remove a node from a cluster, use the `remove-node` command, passing the node
 To shutdown a cluster, use the `teardown` command:
 
 ```
-> atomix-test cluster -i my-cluster teardown
+> atomix-test cluster my-cluster teardown
 my-cluster Tearing down cluster
 my-cluster Stopping container my-cluster-1
 my-cluster Removing container my-cluster-1
@@ -227,6 +239,158 @@ with create_cluster('consensus', nodes=3) as cluster:
     with node1.isolate():
         assert node2.map('test-map').get('foo')['value'] == 'bar'
 ```
+
+## Entropy testing
+
+The test tool comes with a randomized fault injection/fuzz testing
+framework to aid in locating problems that are difficult to reproduce.
+Randomized fault injection tests are referred to as _entropy_ tests.
+Entropy tests randomly inject select faults into a cluster while
+simultaneously performing common operations on the cluster nodes.
+An entropy test runs for a fixed period of time, running _entropy functions_
+at semi-random intervals specified in the entropy test command.
+Functions supported by entropy tests include:
+* Node crash
+* Network partitions
+* Network latency
+* CPU stress
+* I/O stress
+* Memory stress
+* Node addition/removal
+* Cluster restarts
+
+To run entropy tests, use the `atomix-test entropy` command:
+
+```
+atomix-test entropy --nodes 3 --config consensus restart
+```
+
+The entropy test provides several options for configuring the timing
+of entropy functions, the number of operations to perform, and the duration
+of the test:
+* `--parallelism` - the number of processes with which to submit operations
+to the test cluster
+* `--scale` - the total number of keys on which to operate when submitting
+operations to the test cluster
+* `--prime` - the number of operations with which to prime the cluster before
+introducing entropy
+* `--ops` - the total number of operations per second to perform on the test
+cluster during the entropy test
+* `--run-time` - the total number of time for which to run the entropy test.
+Times are specified in human readable format, e.g. `10m30s`
+
+The following entropy functions are supported by the entropy command:
+* `crash`
+* `partition`
+* `stress`
+* `restart`
+
+Each function supports its own distinct set of options specific to the function.
+Multiple entropy functions can be enabled by specifying them in the same command:
+
+```
+atomix-test entropy --nodes 3 --config consensus crash --random 10s restart 30s partition --random --isolate 30s 1m
+```
+
+### crash
+
+The `crash` function crashes a node in the cluster. The first two positional
+argument to the `crash` function are a uniform random delay for crash function
+invocations:
+
+```
+atomix-test entropy -n 3 -c consensus crash 15s 30s
+```
+
+The `--random` option configures the amount of time for which to crash a
+random node, specifying a uniform random interval:
+
+```
+atomix-test entropy -n 3 -c consensus crash --random 30s 1m
+```
+
+### partition
+
+The `partition` function supports various types of network partitions.
+The first two positional arguments to the `partition` function are a uniform
+random delay for partition function invocations:
+
+```
+atomix-test entropy -n 3 -c consensus partition 15s 30s
+```
+
+Additionally, types of partitions are supported by optional arguments:
+* `--random` - partitions a random pair of nodes from each other
+* `--isolate` - partitions a random node from all other nodes in the cluster
+* `--halves` - partitions the cluster into two halves
+* `--bridge` - partitions the cluster into two halves with a single node
+visible to each half
+
+Each partition type supports an optional uniform random partition period:
+
+```
+atomix-test entropy -n 3 -c consensus partition --random 30s --isolate 30s 1m --halves
+```
+
+### stress
+
+The `stress` function supports various types of stress on the cluster and
+the network. The first two positional arguments to the `stress` function
+are a uniform random delay for stress function invocations:
+
+```
+atomix-test entropy -n 3 -c consensus stress 15s 30s
+```
+
+Additionally, types of stress are supported by optional arguments:
+* `--network` - Injects configurable latency into the network
+* `--cpu` - Creates `n` processes spinning on `sqrt()`
+* `--io` - Creates `n` processes spinning on `sync()`
+* `--memory` - Creates `n` processes spinning on `malloc()`/`free()`
+
+```
+atomix-test entropy -n 3 -c consensus stress --network 500ms --cpu 2
+```
+
+The `stress` function also supports optional arguments specifying the nodes
+to which to apply stress functions:
+* `--random` - applies stress functions to a random node
+* `--all` - applies stress functions to all nodes simultaneously
+
+```
+atomix-test entropy -n 3 -c consensus stress --random --network 500ms
+```
+
+Note that each stress option creates a separate entropy function that
+will run independently of all other functions. For example:
+
+```
+atomix-test entropy -n 3 -c consensus stress --random --network 500ms --cpu 2
+```
+
+This command creates the following two functions:
+* Increase latency for a random node by 500ms
+* Increase CPU on a random node
+
+### restart
+
+The `restart` function simply restarts all the nodes in the cluster.
+The only arguments to the `restart` function are a uniform random delay
+for restart function invocations.
+
+The following command restarts the cluster every minute:
+
+```
+atomix-test entropy -n 3 -c consensus restart 1m
+```
+
+The following command restarts the cluster every 10 minutes to 1 hour:
+
+```
+atomix-test entropy -n 3 -c consensus restart 10m 1h
+```
+
+## API
 
 ### Cluster
 
