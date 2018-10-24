@@ -31,7 +31,7 @@ is required for performing operations on the Atomix cluster.
    * [Managing clusters](#managing-clusters)
    * [Accessing primitives](#accessing-primitives)
    * [Fault injection](#fault-injection)
-4. [Fault injection testing](#fault-injection-testing)
+4. [Entropy testing](#entropy-testing)
 5. [API](#api)
 
 ### Setup
