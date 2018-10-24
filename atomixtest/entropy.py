@@ -257,6 +257,9 @@ class Runnable(object):
 
 class Operator(Runnable):
     """Base class for runnables that operate on the cluster state."""
+    CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    VALUES = [''.join([CHARS[random.randint(0, len(CHARS)-1)] for _ in range(1024)]) for _ in range(1000)]
+
     def __init__(self, id, name, scale, history):
         super(Operator, self).__init__()
         self.id = id
@@ -282,7 +285,7 @@ class Operator(Runnable):
 
     def _random_value(self):
         """Returns the next random value to set."""
-        return random.randint(1, 10)
+        return random.choice(self.VALUES)
 
     def _log(self, action, operation, *values):
         """Logs an operation."""

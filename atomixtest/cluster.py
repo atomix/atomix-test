@@ -253,7 +253,7 @@ class Cluster(object):
         lines.append('nodes:')
         for node in self.nodes():
             lines.append('  {}:'.format(node.name))
-            lines.append('    state: {}'.format(node.docker_container.status))
+            lines.append('    state: {}'.format(node.status))
             lines.append('    type: {}'.format(node.type))
             lines.append('    ip: {}'.format(node.ip))
             lines.append('    host port: {}'.format(node.local_port))
