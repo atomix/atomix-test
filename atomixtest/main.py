@@ -173,50 +173,61 @@ def entropy_test(args):
         if delay_args.start is not None and delay_args.end is not None:
             return delay_args.start, delay_args.end
         elif delay_args.start is not None:
-            return delay_args.start, function_delay[1]
+            return delay_args.start, delay_args.start
         else:
             return function_delay
+
+    def get_period(period_args, default_lower=15.0, default_upper=30.0):
+        if period_args is None:
+            return default_lower, default_upper
+        elif len(period_args) == 1:
+            return period_args[0], period_args[0]
+        else:
+            return period_args[0], period_args[1]
 
     if 'crash' in args:
         crash = args.crash
         add_function(
             'crash_random',
             get_delay(crash),
-            ('start', get_or_default(crash.random, 0, 15.0)),
-            ('end', get_or_default(crash.random, 1, 30.0))
+            ('start', get_period(crash.random)[0]),
+            ('end', get_period(crash.random)[1])
         )
+
     if 'partition' in args:
         partition = args.partition
         if partition.random is not None:
             add_function(
                 'partition_random',
                 get_delay(partition),
-                ('start', get_or_default(partition.random, 0, 15.0)),
-                ('end', get_or_default(partition.random, 1, 30.0))
+                ('start', get_period(partition.random)[0]),
+                ('end', get_period(partition.random)[1])
             )
         if partition.isolate is not None:
             add_function(
                 'isolate_random',
                 get_delay(partition),
-                ('start', get_or_default(partition.isolate, 0, 15.0)),
-                ('end', get_or_default(partition.isolate, 1, 30.0))
+                ('start', get_period(partition.isolate)[0]),
+                ('end', get_period(partition.isolate)[1])
             )
         if partition.bridge is not None:
             add_function(
                 'partition_bridge',
                 get_delay(partition),
-                ('start', get_or_default(partition.bridge, 0, 15.0)),
-                ('end', get_or_default(partition.bridge, 1, 30.0))
+                ('start', get_period(partition.bridge)[0]),
+                ('end', get_period(partition.bridge)[1])
             )
         if partition.halves is not None:
             add_function(
                 'partition_halves',
                 get_delay(partition),
-                ('start', get_or_default(partition.halves, 0, 15.0)),
-                ('end', get_or_default(partition.halves, 1, 30.0))
+                ('start', get_period(partition.halves)[0]),
+                ('end', get_period(partition.halves)[1])
             )
+
     if 'restart' in args:
-        add_function('restart', (15.0, 30.0))
+        add_function('restart', get_delay(args.restart))
+
     if 'stress' in args:
         stress = args.stress
         if stress.network is not None:
@@ -225,16 +236,16 @@ def entropy_test(args):
                     'delay',
                     get_delay(stress),
                     ('latency', stress.network),
-                    ('start', get_or_default(stress.all, 0, 15.0)),
-                    ('end', get_or_default(stress.all, 1, 30.0))
+                    ('start', get_period(stress.all)[0]),
+                    ('end', get_period(stress.all)[1])
                 )
             if stress.random is not None:
                 add_function(
                     'delay_random',
                     get_delay(stress),
                     ('latency', stress.network),
-                    ('start', get_or_default(stress.random, 0, 15.0)),
-                    ('end', get_or_default(stress.random, 1, 30.0))
+                    ('start', get_period(stress.random)[0]),
+                    ('end', get_period(stress.random)[1])
                 )
         if stress.cpu is not None:
             if stress.all is not None:
@@ -242,16 +253,16 @@ def entropy_test(args):
                     'stress_cpu',
                     get_delay(stress),
                     ('processes', stress.cpu),
-                    ('start', get_or_default(stress.all, 0, 15.0)),
-                    ('end', get_or_default(stress.all, 1, 30.0))
+                    ('start', get_period(stress.all)[0]),
+                    ('end', get_period(stress.all)[1])
                 )
             if stress.random is not None:
                 add_function(
                     'stress_cpu_random',
                     get_delay(stress),
                     ('processes', stress.cpu),
-                    ('start', get_or_default(stress.random, 0, 15.0)),
-                    ('end', get_or_default(stress.random, 1, 30.0))
+                    ('start', get_period(stress.random)[0]),
+                    ('end', get_period(stress.random)[1])
                 )
         if stress.io is not None:
             if stress.all is not None:
@@ -259,16 +270,16 @@ def entropy_test(args):
                     'stress_io',
                     get_delay(stress),
                     ('processes', stress.io),
-                    ('start', get_or_default(stress.all, 0, 15.0)),
-                    ('end', get_or_default(stress.all, 1, 30.0))
+                    ('start', get_period(stress.all)[0]),
+                    ('end', get_period(stress.all)[1])
                 )
             if stress.random is not None:
                 add_function(
                     'stress_io_random',
                     get_delay(stress),
                     ('processes', stress.io),
-                    ('start', get_or_default(stress.random, 0, 15.0)),
-                    ('end', get_or_default(stress.random, 1, 30.0))
+                    ('start', get_period(stress.random)[0]),
+                    ('end', get_period(stress.random)[1])
                 )
         if stress.memory is not None:
             if stress.all is not None:
@@ -276,16 +287,16 @@ def entropy_test(args):
                     'stress_memory',
                     get_delay(stress),
                     ('processes', stress.memory),
-                    ('start', get_or_default(stress.all, 0, 15.0)),
-                    ('end', get_or_default(stress.all, 1, 30.0))
+                    ('start', get_period(stress.all)[0]),
+                    ('end', get_period(stress.all)[1])
                 )
             if stress.random is not None:
                 add_function(
                     'stress_memory_random',
                     get_delay(stress),
                     ('processes', stress.memory),
-                    ('start', get_or_default(stress.random, 0, 15.0)),
-                    ('end', get_or_default(stress.random, 1, 30.0))
+                    ('start', get_period(stress.random)[0]),
+                    ('end', get_period(stress.random)[1])
                 )
 
     if args.debug:
@@ -341,80 +352,6 @@ def seconds(time):
     return millis / 1000.0
 
 def _parse_cluster_args(args):
-
-    def percentage(value):
-        if value.endswith('%'):
-            return float(value[:-1]) / 100
-        return float(value)
-
-    def _parse_milliseconds(time):
-        regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m(?!s))?((?P<seconds>\d+?)s)?((?P<milliseconds>\d+?)ms)?')
-        parts = regex.match(time.lower())
-        if not parts:
-            return None
-        parts = parts.groupdict()
-        time_params = {}
-        for (name, param) in parts.iteritems():
-            if param:
-                time_params[name] = int(param)
-        if not time_params:
-            return None
-        return int(timedelta(**time_params).total_seconds() * 1000)
-
-    def milliseconds(time):
-        millis = _parse_milliseconds(time)
-        if millis is None:
-            return float(time)
-        return time
-
-    def seconds(time):
-        millis = _parse_milliseconds(time)
-        if millis is None:
-            return float(time)
-        return millis / 1000.0
-
-    def milliseconds_plus_seconds_range():
-        args = []
-        def func(arg):
-            try:
-                if len(args) == 0:
-                    return milliseconds(arg)
-                elif len(args) == 1:
-                    return seconds(arg)
-                else:
-                    raise ArgumentTypeError("Too many arguments")
-            finally:
-                args.append(arg)
-        return func
-
-    def seconds_range():
-        args = []
-        def func(arg):
-            try:
-                if len(args) < 2:
-                    return seconds(arg)
-                else:
-                    raise ArgumentTypeError("Too many arguments")
-            finally:
-                args.append(arg)
-        return func
-
-    def int_plus_seconds_range():
-        args = []
-        def func(arg):
-            try:
-                if len(args) == 0:
-                    try:
-                        return int(arg)
-                    except ValueError, e:
-                        raise ArgumentTypeError(e)
-                elif len(args) < 3:
-                    return seconds(arg)
-                else:
-                    raise ArgumentTypeError("Too many arguments")
-            finally:
-                args.append(arg)
-        return func
 
     def name_or_id(value):
         try:
@@ -709,6 +646,7 @@ def _parse_root_args(args):
         '--config',
         '-c',
         nargs='+',
+        default=[],
         metavar='FILE',
         help="The configuration(s) to apply to the cluster."
     )
@@ -872,6 +810,20 @@ def _parse_partition_args(args):
 
 def _parse_restart_args(args):
     parser = ArgumentParser(prog='atomix-test entropy restart')
+    parser.add_argument(
+        'start',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The beginning of the restart period."
+    )
+    parser.add_argument(
+        'end',
+        nargs='?',
+        type=seconds,
+        metavar='DURATION',
+        help="The end of the restart period."
+    )
     return parser.parse_args(args)
 
 def _parse_stress_args(args):
@@ -921,7 +873,7 @@ def _parse_stress_args(args):
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='COUNT',
         help="Stress the CPU"
     )
     parser.add_argument(
@@ -930,7 +882,7 @@ def _parse_stress_args(args):
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='COUNT',
         help="Stress the I/O"
     )
     parser.add_argument(
@@ -939,7 +891,7 @@ def _parse_stress_args(args):
         nargs='?',
         type=int,
         const=1,
-        metavar='PROCESSES',
+        metavar='COUNT',
         help="Stress the memory"
     )
 
