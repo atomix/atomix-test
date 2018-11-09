@@ -143,6 +143,7 @@ def destress(args):
 
 def _entropy_functions():
     return {
+        'none': lambda x: Namespace(),
         'crash': _parse_crash_args,
         'partition': _parse_partition_args,
         'restart': _parse_restart_args,
@@ -948,6 +949,9 @@ def _parse_entropy_args(args):
         else:
             root_args.append(arg)
             i += 1
+
+    if not root_parsed:
+        results.update(vars(_parse_root_args(root_args)))
     return Namespace(**results)
 
 
