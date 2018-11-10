@@ -44,7 +44,7 @@ class Cluster(object):
     @property
     def profile(self):
         container_info = self._docker_api_client.inspect_container(self.node(1).name)
-        return container_info['Config']['Labels']['atomix-profile'] == 'true'
+        return container_info['Config']['Labels']['atomix-profile'] != ''
 
     def node(self, id):
         """Returns the node with the given ID."""
@@ -88,7 +88,8 @@ class Cluster(object):
             'supernet': '172.18.0.0/16',
             'subnet': None,
             'gateway': None,
-            'version': 'latest'
+            'version': 'latest',
+            'profile': False
         }
 
         def kwarg(name):
@@ -111,8 +112,11 @@ class Cluster(object):
             self._nodes.append(node)
             setup_nodes.append(node)
 
+        profiler_port = 10001 if kwarg('profile') else None
         for node in setup_nodes:
+            kwargs['profile'] = profiler_port
             node.setup(*args, **kwargs)
+            profiler_port += 1
 
         logger.info("Waiting for cluster bootstrap")
         self.wait_for_start()
@@ -142,7 +146,7 @@ class Cluster(object):
             *args,
             cpus=self.cpus,
             memory=self.memory,
-            profile=self.profile
+            profile=10000 + len(self._nodes)
         )
 
         # Wait for the node to finish startup before returning.
@@ -356,9 +360,8 @@ class Node(object):
 
     @property
     def profiler_port(self):
-        if self.cluster.profile:
-            port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
-            return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
+        container_info = self._docker_api_client.inspect_container(self.docker_container.name)
+        return int(container_info['Config']['Labels']['atomix-profile']) if container_info['Config']['Labels']['atomix-profile'] != '' else None
 
     @property
     def profiles(self):
@@ -387,7 +390,7 @@ class Node(object):
         defaults = {
             'cpus': None,
             'memory': None,
-            'profile': False,
+            'profile': None,
             'debug': False,
             'trace': False
         }
@@ -478,8 +481,9 @@ class Node(object):
 
         # Find an open HTTP port and if profiling is enabled a profiler port to which to bind
         ports = {self.http_port: self._find_open_port()}
-        if kwarg('profile'):
-            ports[10001] = self._find_open_port()
+        profiler_port = kwarg('profile')
+        if profiler_port is not None:
+            ports[10001] = profiler_port
             environment['JAVA_OPTS'] = '-agentpath:/root/atomix/lib/libyjpagent.so=listen=all'
 
         args.append('--log-dir')
@@ -507,7 +511,7 @@ class Node(object):
                 'atomix-cluster': self.cluster.name,
                 'atomix-bootstrap': 'true' if self.bootstrap else 'false',
                 'atomix-version': self.version,
-                'atomix-profile': 'true' if kwarg('profile') else 'false'
+                'atomix-profile': str(profiler_port) or ''
             },
             cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
