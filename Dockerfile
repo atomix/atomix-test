@@ -9,6 +9,7 @@ ENV JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF8
 # Get arguments
 ARG REPO=https://github.com/atomix/atomix.git
 ARG BRANCH=master
+ARG PROFILER=2018.04-b86
 
 # Change to the build directory
 WORKDIR /src/atomix
@@ -22,6 +23,11 @@ RUN apt-get update && apt-get install -y zip maven git bzip2 build-essential ipt
     && cd /src/tar \
     && tar -xf /src/atomix/dist/target/atomix.tar.gz \
     && rm -rf .git
+RUN mkdir -p /src/yourkit
+RUN cd /src/yourkit
+RUN curl -o YourKit-JavaProfiler-$PROFILER.zip https://www.yourkit.com/download/YourKit-JavaProfiler-$PROFILER.zip
+RUN unzip YourKit-JavaProfiler-$PROFILER.zip
+RUN mv YourKit-JavaProfiler-$(echo $PROFILER | sed 's/\(.*\)-.*/\1/')/bin/linux-x86-64/libyjpagent.so /src/tar/lib/libyjpagent.so
 
 # Second stage is the runtime environment
 FROM anapsix/alpine-java:8_server-jre

@@ -18,7 +18,7 @@ def setup(args):
         gateway=args.gateway,
         cpus=args.cpu,
         memory=args.memory_limit,
-        profiler=args.profiler,
+        profile=args.profile,
         debug=args.debug,
         trace=args.trace
     )
@@ -420,8 +420,10 @@ def _parse_cluster_args(args):
         help="Enable trace logging"
     )
     setup_parser.add_argument(
-        '--profiler',
-        choices=['yourkit'],
+        '--profile',
+        '-p',
+        action='store_true',
+        default=False,
         help="Enable profiling"
     )
     setup_parser.set_defaults(func=setup)

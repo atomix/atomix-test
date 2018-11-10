@@ -42,9 +42,9 @@ class Cluster(object):
         return self._docker_api_client.inspect_container(self.node(1).name)['HostConfig']['Memory']
 
     @property
-    def profiler(self):
-        envs = self._docker_api_client.inspect_container(self.node(1).name)['Config']['Env']
-        return _find_env(envs, 'profiler')
+    def profile(self):
+        container_info = self._docker_api_client.inspect_container(self.node(1).name)
+        return container_info['Config']['Labels']['atomix-profile'] == 'true'
 
     def node(self, id):
         """Returns the node with the given ID."""
@@ -142,7 +142,7 @@ class Cluster(object):
             *args,
             cpus=self.cpus,
             memory=self.memory,
-            profiler=self.profiler
+            profile=self.profile
         )
 
         # Wait for the node to finish startup before returning.
@@ -356,7 +356,7 @@ class Node(object):
 
     @property
     def profiler_port(self):
-        if self.cluster.profiler:
+        if self.cluster.profile:
             port_bindings = self._docker_api_client.inspect_container(self.docker_container.name)['HostConfig']['PortBindings']
             return port_bindings['10001/tcp'.format(self.http_port)][0]['HostPort']
 
@@ -387,7 +387,7 @@ class Node(object):
         defaults = {
             'cpus': None,
             'memory': None,
-            'profiler': False,
+            'profile': False,
             'debug': False,
             'trace': False
         }
@@ -469,17 +469,18 @@ class Node(object):
                     f.write(config_text)
                     args.append(os.path.join('/data', os.path.basename(f.name)))
 
-        # Find an open HTTP port and if profiling is enabled a profiler port to which to bind
-        ports = {self.http_port: self._find_open_port()}
-        if kwarg('profiler'):
-            ports[10001] = self._find_open_port()
-
         environment = {
             'CLUSTER_ID': self.cluster.name,
             'NODE_ID': self.name,
             'NODE_ADDRESS': self.address,
             'DATA_DIR': '/data'
         }
+
+        # Find an open HTTP port and if profiling is enabled a profiler port to which to bind
+        ports = {self.http_port: self._find_open_port()}
+        if kwarg('profile'):
+            ports[10001] = self._find_open_port()
+            environment['JAVA_OPTS'] = '-agentpath:/root/atomix/lib/libyjpagent.so=listen=all'
 
         args.append('--log-dir')
         args.append('/data/log')
@@ -505,7 +506,8 @@ class Node(object):
                 'atomix-process': self.process_id or '',
                 'atomix-cluster': self.cluster.name,
                 'atomix-bootstrap': 'true' if self.bootstrap else 'false',
-                'atomix-version': self.version
+                'atomix-version': self.version,
+                'atomix-profile': 'true' if kwarg('profile') else 'false'
             },
             cap_add=['NET_ADMIN'],
             network=self.cluster.network.name,
