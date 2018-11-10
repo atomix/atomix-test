@@ -44,7 +44,12 @@ def upgrade(args):
     get_cluster(args.name).upgrade(version=args.version)
 
 def add_node(args):
-    get_cluster(args.name).add_node(*args.config, version=args.version)
+    get_cluster(args.name).add_node(
+        *args.config,
+        version=args.version,
+        debug=args.debug,
+        trace=args.trace
+    )
 
 def remove_node(args):
     get_cluster(args.name).remove_node(args.node)
@@ -471,6 +476,20 @@ def _parse_cluster_args(args):
         type=str,
         default='latest',
         help="The version to setup"
+    )
+    add_node_parser.add_argument(
+        '--debug',
+        '-d',
+        action='store_true',
+        default=False,
+        help="Enable debug logging"
+    )
+    add_node_parser.add_argument(
+        '--trace',
+        '-t',
+        action='store_true',
+        default=False,
+        help="Enable trace logging"
     )
     add_node_parser.set_defaults(func=add_node)
 

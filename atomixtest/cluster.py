@@ -146,7 +146,9 @@ class Cluster(object):
             *args,
             cpus=self.cpus,
             memory=self.memory,
-            profile=10000 + len(self._nodes)
+            profile=10000 + len(self._nodes),
+            debug=kwargs.get('debug', False),
+            trace=kwargs.get('trace', False)
         )
 
         # Wait for the node to finish startup before returning.
