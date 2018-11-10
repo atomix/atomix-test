@@ -13,6 +13,8 @@ ARG PROFILER=2018.04-b86
 
 # Change to the build directory
 WORKDIR /src/atomix
+
+# Build Atomix
 RUN apt-get update && apt-get install -y zip maven git bzip2 build-essential iptables stress \
     && git clone --branch $BRANCH $REPO /src/atomix \
     && cd /src/atomix \
@@ -23,11 +25,13 @@ RUN apt-get update && apt-get install -y zip maven git bzip2 build-essential ipt
     && cd /src/tar \
     && tar -xf /src/atomix/dist/target/atomix.tar.gz \
     && rm -rf .git
-RUN mkdir -p /src/yourkit
-RUN cd /src/yourkit
-RUN curl -o YourKit-JavaProfiler-$PROFILER.zip https://www.yourkit.com/download/YourKit-JavaProfiler-$PROFILER.zip
-RUN unzip YourKit-JavaProfiler-$PROFILER.zip
-RUN mv YourKit-JavaProfiler-$(echo $PROFILER | sed 's/\(.*\)-.*/\1/')/bin/linux-x86-64/libyjpagent.so /src/tar/lib/libyjpagent.so
+
+# Download the profiler
+RUN mkdir -p /src/yourkit \
+    && cd /src/yourkit \
+    && curl -o YourKit-JavaProfiler-$PROFILER.zip https://www.yourkit.com/download/YourKit-JavaProfiler-$PROFILER.zip \
+    && unzip YourKit-JavaProfiler-$PROFILER.zip \
+    && mv YourKit-JavaProfiler-$(echo $PROFILER | sed 's/\(.*\)-.*/\1/')/bin/linux-x86-64/libyjpagent.so /src/tar/lib/libyjpagent.so
 
 # Second stage is the runtime environment
 FROM anapsix/alpine-java:8_server-jre
